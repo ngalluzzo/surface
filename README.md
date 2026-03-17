@@ -2,8 +2,8 @@
 
 This repository is a monorepo containing two packages:
 
-- **[schemarr](packages/schemarr/README.md)** — Schema conversion and codegen (JSON Schema, Zod, GraphQL, Drizzle, SQL). Includes a CLI.
-- **[surface](packages/surface/README.md)** — Operation framework for building servers and clients (HTTP, GraphQL, jobs, events, etc.). Depends on schemarr.
+- **[@gooios/schemarr](packages/schemarr/README.md)** — Schema conversion and codegen (JSON Schema, Zod, GraphQL, Drizzle, SQL). Includes a CLI.
+- **[@gooios/surface](packages/surface/README.md)** — Operation framework for building servers and clients (HTTP, GraphQL, jobs, events, etc.). Depends on @gooios/schemarr.
 
 Both packages are published to npm independently.
 
@@ -49,4 +49,4 @@ This repo uses [Changesets](https://github.com/changesets/changesets) for versio
    ```
    Ensure both packages are built first (`bun run build` in each package). You must be logged in to npm (`npm login`) and have publish access.
 
-First-time publish order: publish **schemarr** first, then **surface** (since surface depends on schemarr).
+First-time publish order: publish **@gooios/schemarr** first, then **@gooios/surface** (since surface depends on schemarr).

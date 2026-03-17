@@ -2,6 +2,8 @@
 
 Define an operation once. Expose it everywhere.
 
+**Install:** `bun add @gooios/surface` or `npm install @gooios/surface`. For GraphQL schema generation you also need `@gooios/schemarr`.
+
 `surface` is a TypeScript library for building backend operations that run across multiple surfaces — HTTP endpoints, CLI commands, background jobs, scheduled tasks, event consumers, webhooks, GraphQL mutations, and MCP tools — without duplicating logic, validation, or configuration.
 
 ```ts
@@ -126,7 +128,7 @@ Surface adapters map this to their format. HTTP maps to status codes (including 
 
 ```ts
 import { z } from "zod/v4";
-import { defineOperation } from "surface";
+import { defineOperation } from "@gooios/surface";
 
 export const registerOperation = defineOperation({
   name: "registrations.register",
@@ -176,7 +178,7 @@ Top-level `guards` are domain guards — they run in phase 3 against the validat
 You can define named guard policies for reuse and omit them by name:
 
 ```ts
-import { defineGuardPolicy } from "surface";
+import { defineGuardPolicy } from "@gooios/surface";
 
 export const adminOnly = defineGuardPolicy("adminOnly", [
   requireSession,
@@ -216,7 +218,7 @@ Domain guards work the same: return `ok(delta)` to attach data; the runner merge
 Operations with optional **`outputChunkSchema`** are stream operations: the handler returns an `AsyncIterable`; the adapter responds with a `ReadableStream` of NDJSON (see [Streaming](#streaming)).
 
 ```ts
-import { buildHttpHandlers, forSurface } from "surface";
+import { buildHttpHandlers, forSurface } from "@gooios/surface";
 
 const httpRegistry = forSurface(registry, "http");
 const handlers = buildHttpHandlers(httpRegistry, { db });
@@ -254,7 +256,7 @@ Default status code mapping (overridable per-operation):
 ### CLI — `runCli`
 
 ```ts
-import { runCli } from "surface";
+import { runCli } from "@gooios/surface";
 
 await runCli(registry, { db }, process.argv.slice(2));
 // $ my-app registrations register --personId abc --eventId xyz --eventCapacity 50 --confirmedCount 10
@@ -268,7 +270,7 @@ Unknown commands print auto-generated help from operation `description` fields a
 ### Job — `registerJobOperations`
 
 ```ts
-import { registerJobOperations } from "surface";
+import { registerJobOperations } from "@gooios/surface";
 
 const runner = createBullMqRunner({ redisUrl: env.REDIS_URL });
 registerJobOperations(registry, runner, { db });
@@ -287,7 +289,7 @@ If an `idempotencyKey` function is defined on the job config, the registered def
 ### Cron — `registerCronOperations`
 
 ```ts
-import { registerCronOperations } from "surface";
+import { registerCronOperations } from "@gooios/surface";
 
 const scheduler = createNodeCronScheduler();
 registerCronOperations(registry, scheduler, { db });
@@ -320,7 +322,7 @@ expose: {
 ```
 
 ```ts
-import { registerEventConsumers } from "surface";
+import { registerEventConsumers } from "@gooios/surface";
 
 const transport = createSqsTransport({ region: "us-east-1" });
 registerEventConsumers(registry, transport, { db });
@@ -354,10 +356,10 @@ expose: {
 
 ### GraphQL — `buildGraphQLSchema`
 
-Derives a GraphQL schema from operation input and output schemas via **Zod → JSON Schema → GraphQL** (using [schemarr](https://github.com/your-org/portal/tree/main/shared/schemarr) for the JSON Schema → GraphQL step). Each operation becomes a mutation or query with a single `input` argument and return type inferred from `op.schema` and `op.outputSchema`.
+Derives a GraphQL schema from operation input and output schemas via **Zod → JSON Schema → GraphQL** (using [@gooios/schemarr](https://www.npmjs.com/package/@gooios/schemarr) for the JSON Schema → GraphQL step). Each operation becomes a mutation or query with a single `input` argument and return type inferred from `op.schema` and `op.outputSchema`.
 
 ```ts
-import { buildGraphQLSchema } from "surface";
+import { buildGraphQLSchema } from "@gooios/surface";
 
 const schema = await buildGraphQLSchema(registry, ctx);
 const server = new ApolloServer({ schema });
@@ -379,7 +381,7 @@ expose: {
 Exposes operations as MCP tools. Input schema, description, and handler are derived directly from the operation definition — no additional configuration required beyond opting in. Pass a server that implements `McpServerLike` (e.g. from `@modelcontextprotocol/sdk`); the adapter registers each MCP-exposed operation as a tool.
 
 ```ts
-import { buildMcpServer } from "surface";
+import { buildMcpServer } from "@gooios/surface";
 
 const server = createMcpServer(); // from @modelcontextprotocol/sdk
 buildMcpServer(registry, server, { db });
@@ -403,7 +405,7 @@ RPC over a persistent connection: client sends `{ op, payload?, id? }`, adapter 
 **Subscriptions**: Define an operation (e.g. `subscriptions.subscribe`) exposed on `ws` with schema `{ topic: string }`. In the handler, call `ctx.hub.subscribe(ctx.connection, payload.topic)`. Use `createSubscriptionHub()` for an in-memory hub; call `hub.publish(topic, data)` from anywhere to push `{ type: "push", topic, data }` to all subscribed connections. Call `hub.unsubscribe(connection)` from `onDisconnect` to clean up.
 
 ```ts
-import { buildWsHandlers, createSubscriptionHub } from "surface";
+import { buildWsHandlers, createSubscriptionHub } from "@gooios/surface";
 
 const hub = createSubscriptionHub();
 const handlers = buildWsHandlers(registry, (connection) => ({
@@ -447,7 +449,7 @@ You define a **registry type** (or import it from a shared package) mapping oper
 Define an object type that lists each operation and its input/output (e.g. from your Zod schemas):
 
 ```ts
-import type { RegistryContract } from "surface/client";
+import type { RegistryContract } from "@gooios/surface/client";
 
 type AppRegistry = {
   "registrations.register": {
@@ -468,14 +470,14 @@ type AppRegistry = {
 
 Use this type with all clients below. The server builds runtime maps (method+path, topic, etc.) from the same registry; the client stays in sync via types.
 
-### HTTP client — `surface/client`
+### HTTP client — `@gooios/surface/client`
 
 Framework-agnostic fetch-based client. Returns `Promise<Result<TOutput, ExecutionError>>` — the same shape the server sends in the response body.
 
 ```ts
-import { buildHttpMapFromRegistry } from "surface";
-import { createClient } from "surface/client";
-import type { HttpMap } from "surface/client";
+import { buildHttpMapFromRegistry } from "@gooios/surface";
+import { createClient } from "@gooios/surface/client";
+import type { HttpMap } from "@gooios/surface/client";
 import type { AppRegistry } from "./registry";
 
 // Build httpMap from the server registry (or maintain manually)
@@ -504,12 +506,12 @@ if (result.ok) {
 
 Use in server-side callers, CLI scripts, tests, or any non-React context. No React or TanStack Query required.
 
-### Job client — `surface/job-client`
+### Job client — `@gooios/surface/job-client`
 
 Type-safe enqueue. Payload is typed per operation; wrong shape is a compile error instead of a runtime failure in the worker.
 
 ```ts
-import { createJobClient } from "surface/job-client";
+import { createJobClient } from "@gooios/surface/job-client";
 import type { AppRegistry } from "./registry";
 
 const enqueue = {
@@ -539,12 +541,12 @@ await jobs.enqueue("registrations.register", payload, {
 
 Queue, retries, and timeout come from the operation’s job config on the worker; the client only sends name, payload, and optional key.
 
-### Event client — `surface/event-client`
+### Event client — `@gooios/surface/event-client`
 
 Type-safe publish. Topic and source come from the event map (built from the operation’s event config), not from the call site.
 
 ```ts
-import { createEventClient, buildEventMapFromRegistry } from "surface";
+import { createEventClient, buildEventMapFromRegistry } from "@gooios/surface";
 import type { AppRegistry } from "./registry";
 
 const eventMap = buildEventMapFromRegistry(registry);
@@ -564,15 +566,15 @@ await events.publish("registrations.requested", {
 
 Fire-and-forget; no return value.
 
-### React Query — `surface/client/react`
+### React Query — `@gooios/surface/client/react`
 
 Thin wrapper over the HTTP client. Use `useOperationQuery` for read-like operations and `useOperationMutation` for write-like; type inference and error handling stay in the base client.
 
 Requires `react` and `@tanstack/react-query` as peer dependencies.
 
 ```ts
-import { createClient } from "surface/client";
-import { useOperationQuery, useOperationMutation } from "surface/client/react";
+import { createClient } from "@gooios/surface/client";
+import { useOperationQuery, useOperationMutation } from "@gooios/surface/client/react";
 import type { AppRegistry } from "./registry";
 
 const client = createClient<AppRegistry>({ baseUrl: "/api", httpMap });
@@ -606,7 +608,7 @@ function RegisterForm() {
 Wire in tracing, logging, or metrics once — it applies to every operation on every surface:
 
 ```ts
-import { composeRegistries } from "surface";
+import { composeRegistries } from "@gooios/surface";
 
 const registry = composeRegistries([...], {
   hooks: {
@@ -678,7 +680,7 @@ Operations may set `version` (e.g. `version: 1`) on the definition. It is stored
 Every operation schema is registered automatically when `defineOperation` is called. The catalogue includes **input and output** schemas (and optional `version` in metadata). Export as OpenAPI 3.0 or JSON Schema:
 
 ```ts
-import { exportSchemas } from "surface";
+import { exportSchemas } from "@gooios/surface";
 
 const catalogue = exportSchemas("openapi-3.0"); // input + output schemas, version in metadata
 await fs.writeFile("openapi.json", JSON.stringify(catalogue, null, 2));
@@ -691,7 +693,7 @@ await fs.writeFile("openapi.json", JSON.stringify(catalogue, null, 2));
 `testOperation(op, raw, ctx, options?)` runs an operation in tests without a surface: it skips surface guards, runs schema validation and domain guards + handler with the context you pass. Same return type as `execute()` (errors are validation, domain-guard, or handler only).
 
 ```ts
-import { testOperation } from "surface";
+import { testOperation } from "@gooios/surface";
 import { registerOperation } from "./register.operation";
 
 it("rejects when event is at capacity", async () => {
@@ -745,11 +747,11 @@ packages/surface/
       webhook.ts     buildWebhookHandlers()
       graphql.ts     buildGraphQLSchema()
       mcp.ts         buildMcpServer()
-    client/          Typed HTTP client (entrypoint: surface/client)
+    client/          Typed HTTP client (entrypoint: @gooios/surface/client)
       index.ts       createClient(), types, Result, ExecutionError
-      react.ts       useOperationQuery, useOperationMutation (surface/client/react)
-    job-client/      Typed job enqueue (entrypoint: surface/job-client)
-    event-client/    Typed event publish (entrypoint: surface/event-client)
+      react.ts       useOperationQuery, useOperationMutation (@gooios/surface/client/react)
+    job-client/      Typed job enqueue (entrypoint: @gooios/surface/job-client)
+    event-client/    Typed event publish (entrypoint: @gooios/surface/event-client)
   index.ts           Barrel
 ```
 

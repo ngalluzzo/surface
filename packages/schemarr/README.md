@@ -34,10 +34,10 @@ Eliminate schema drift between your APIs and databases with a single source of t
 
 ```bash
 # CLI
-bun install -g schemarr
+bun install -g @gooios/schemarr
 
 # Library
-bun add schemarr
+bun add @gooios/schemarr
 ```
 
 ## Quick Start
@@ -146,7 +146,7 @@ import {
   convertZodToTypes,
   convertZodToIR,
   postgresDialect,
-} from 'schemarr';
+} from '@gooios/schemarr';
 
 // Convert JSON Schema to SQL
 const result = convert(schema, {
@@ -192,7 +192,7 @@ You can now convert Zod schemas directly to SQL, TypeScript, or normalized Zod c
 
 ```typescript
 import { z } from 'zod';
-import { convertZodToSql, postgresDialect } from 'schemarr';
+import { convertZodToSql, postgresDialect } from '@gooios/schemarr';
 
 const UserSchema = z.object({
   id: z.uuid(),
