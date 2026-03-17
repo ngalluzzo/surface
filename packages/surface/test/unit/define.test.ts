@@ -6,6 +6,8 @@ import {
 	defineGuardPolicy,
 	defineRegistry,
 	forSurface,
+	normalizeOperationSurfaceBindings,
+	normalizeSurfaceBindings,
 } from "../../src/index.js";
 
 const schema = z.object({ id: z.string() });
@@ -98,5 +100,37 @@ describe("forSurface", () => {
 		const reg = defineRegistry("test", [makeOp("test.http", { http: true })]);
 		const jobOps = forSurface(reg, "job");
 		expect(jobOps.size).toBe(0);
+	});
+});
+
+describe("normalizeSurfaceBindings", () => {
+	test("returns one synthetic default binding for each matching operation", () => {
+		const httpOnly = makeOp("test.httpOnly", { http: true });
+		const both = makeOp("test.both", { http: true, cli: true });
+		const reg = defineRegistry("test", [httpOnly, both]);
+
+		const bindings = normalizeSurfaceBindings(reg, "http");
+		expect(bindings).toHaveLength(2);
+		expect(bindings.map((binding) => binding.bindingName)).toEqual([
+			"default",
+			"default",
+		]);
+		expect(bindings.map((binding) => binding.bindingId)).toEqual([
+			"test.httpOnly:default",
+			"test.both:default",
+		]);
+		expect(bindings.map((binding) => binding.operationName)).toEqual([
+			"test.httpOnly",
+			"test.both",
+		]);
+		expect(bindings.map((binding) => binding.config.path)).toEqual([
+			"/test.httpOnly",
+			"/test.both",
+		]);
+	});
+
+	test("returns empty array when the operation is not exposed on that surface", () => {
+		const cliOnly = makeOp("test.cliOnly", { cli: true });
+		expect(normalizeOperationSurfaceBindings(cliOnly, "http")).toEqual([]);
 	});
 });

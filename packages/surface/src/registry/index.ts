@@ -4,6 +4,11 @@ export {
 	defineRegistry,
 	forSurface,
 } from "./define-registry";
+export type { NormalizedSurfaceBinding } from "./normalize-surface-bindings";
+export {
+	normalizeOperationSurfaceBindings,
+	normalizeSurfaceBindings,
+} from "./normalize-surface-bindings";
 export type {
 	SchemaMetadata,
 	SchemaRegistryInstance,

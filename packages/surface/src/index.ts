@@ -12,6 +12,7 @@ export {
 } from "./idempotency";
 export type {
 	CreateOpsOptions,
+	NormalizedSurfaceBinding,
 	OperationRegistryWithHooks,
 	SchemaMetadata,
 	SchemaRegistryInstance,
@@ -28,6 +29,8 @@ export {
 	defineRegistry,
 	exportSchemas,
 	forSurface,
+	normalizeOperationSurfaceBindings,
+	normalizeSurfaceBindings,
 	registerOperationSchema,
 } from "./operation";
 // Types

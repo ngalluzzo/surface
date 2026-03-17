@@ -1,4 +1,5 @@
 export type {
+	NormalizedSurfaceBinding,
 	OperationRegistryWithHooks,
 	SchemaMetadata,
 	SchemaRegistryInstance,
@@ -11,6 +12,8 @@ export {
 	defineRegistry,
 	exportSchemas,
 	forSurface,
+	normalizeOperationSurfaceBindings,
+	normalizeSurfaceBindings,
 	registerOperationSchema,
 } from "../registry";
 export type { CreateOpsOptions } from "./create-ops";

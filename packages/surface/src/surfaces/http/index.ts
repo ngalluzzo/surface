@@ -3,7 +3,7 @@ import { execute, getHooks } from "../../execution";
 import type { IdempotencyStore } from "../../idempotency";
 import { executeWithIdempotency } from "../../idempotency";
 import type { OperationRegistryWithHooks } from "../../operation";
-import { forSurface } from "../../operation";
+import { normalizeSurfaceBindings } from "../../operation";
 import type { DefaultContext, OperationRegistry } from "../../operation/types";
 import type { HttpHandler, HttpRequest } from "./types";
 
@@ -113,8 +113,8 @@ export function buildHttpHandlers<C extends DefaultContext = DefaultContext>(
 	options?: BuildHttpHandlersOptions<C>,
 ): Map<string, HttpHandler<C>> {
 	const handlers = new Map<string, HttpHandler<C>>();
-	const httpOps = forSurface(registry, "http");
-	const hooks = getHooks(httpOps);
+	const httpBindings = normalizeSurfaceBindings(registry, "http");
+	const hooks = "hooks" in registry ? getHooks(registry) : undefined;
 	const idempotencyStore = options?.idempotencyStore;
 	const idempotencyTtlMs = options?.idempotencyTtlMs;
 	const useIdempotency =
@@ -128,9 +128,8 @@ export function buildHttpHandlers<C extends DefaultContext = DefaultContext>(
 			? executeWithIdempotency(idempotencyStore, idempotencyTtlMs)
 			: execute;
 
-	for (const [, op] of httpOps) {
-		const config = op.expose.http;
-		if (!config) throw new Error(`Missing http config for ${op.name}`);
+	for (const binding of httpBindings) {
+		const { op, config } = binding;
 		const route = `${config.method} ${config.path}`;
 
 		handlers.set(route, async (req) => {
@@ -186,12 +185,13 @@ export function buildHttpMapFromRegistry<
 >(
 	registry: OperationRegistry<C> | OperationRegistryWithHooks<C>,
 ): Record<string, { method: string; path: string }> {
-	const httpOps = forSurface(registry, "http");
+	const httpBindings = normalizeSurfaceBindings(registry, "http");
 	const map: Record<string, { method: string; path: string }> = {};
-	for (const [, op] of httpOps) {
-		const config = op.expose.http;
-		if (!config) continue;
-		map[op.name] = { method: config.method, path: config.path };
+	for (const binding of httpBindings) {
+		map[binding.operationName] = {
+			method: binding.config.method,
+			path: binding.config.path,
+		};
 	}
 	return map;
 }
