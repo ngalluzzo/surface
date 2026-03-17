@@ -1,5 +1,5 @@
 {
-	"name": "surface",
+	"name": "@gooios/surface",
 	"version": "0.1.0",
 	"type": "module",
 	"exports": {
@@ -37,11 +37,11 @@
 		"typecheck": "tsc --noEmit",
 		"test": "bun test",
 		"build": "bun run clean && bun run build:pkg",
-		"build:pkg": "bun build ./src/index.ts ./src/client/index.ts ./src/client/react.ts ./src/job-client/index.ts ./src/event-client/index.ts --outdir ./dist --target node --external zod --external schemarr --external react --external graphql --external @tanstack/react-query",
+		"build:pkg": "bun build ./src/index.ts ./src/client/index.ts ./src/client/react.ts ./src/job-client/index.ts ./src/event-client/index.ts --outdir ./dist --target node --external zod --external @gooios/schemarr --external react --external graphql --external @tanstack/react-query",
 		"clean": "rm -rf ./dist"
 	},
 	"dependencies": {
-		"schemarr": "workspace:*",
+		"@gooios/schemarr": "workspace:*",
 		"zod": "catalog:"
 	},
 	"peerDependencies": {
