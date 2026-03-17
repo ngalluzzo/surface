@@ -1,0 +1,27 @@
+{
+  "name": "surface",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "typecheck": "tsc --build --noEmit",
+    "lint": "biome check packages --error-on-warnings",
+    "lint:fix": "biome check packages --write --error-on-warnings",
+    "format": "biome format . --write",
+    "changeset": "changeset",
+    "version": "changeset version",
+    "build:all": "bun run --filter='**' build",
+    "release": "bun run build:all && changeset publish"
+  },
+  "catalog": {
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.4.7",
+    "@changesets/cli": "^2.30.0",
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5.9.3"
+  }
+}

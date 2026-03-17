@@ -1,0 +1,75 @@
+{
+	"$schema": "http://json-schema.org/draft-07/schema#",
+	"title": "Course",
+	"type": "object",
+	"required": ["id", "name"],
+	"properties": {
+		"id": {
+			"type": "string",
+			"format": "uuid"
+		},
+		"name": {
+			"type": "string",
+			"maxLength": 200
+		},
+		"lessons": {
+			"type": "array",
+			"description": "Array of $ref — one-to-many, FK on child",
+			"items": {
+				"$ref": "#/definitions/Lesson"
+			}
+		},
+		"students": {
+			"type": "array",
+			"description": "Array of $ref to shared entity — many-to-many, join table",
+			"items": {
+				"$ref": "#/definitions/Student"
+			},
+			"x-relation": "many-to-many"
+		},
+		"tags": {
+			"type": "array",
+			"description": "Array of primitives — pg array column",
+			"items": {
+				"type": "string"
+			}
+		}
+	},
+	"definitions": {
+		"Lesson": {
+			"title": "Lesson",
+			"type": "object",
+			"required": ["id", "title"],
+			"properties": {
+				"id": {
+					"type": "string",
+					"format": "uuid"
+				},
+				"title": {
+					"type": "string"
+				},
+				"duration_minutes": {
+					"type": "integer"
+				}
+			}
+		},
+		"Student": {
+			"title": "Student",
+			"type": "object",
+			"required": ["id", "name"],
+			"properties": {
+				"id": {
+					"type": "string",
+					"format": "uuid"
+				},
+				"name": {
+					"type": "string"
+				},
+				"email": {
+					"type": "string",
+					"format": "email"
+				}
+			}
+		}
+	}
+}

@@ -1,0 +1,53 @@
+{
+	"$schema": "http://json-schema.org/draft-07/schema#",
+	"title": "AllTypes",
+	"type": "object",
+	"required": ["id"],
+	"properties": {
+		"id": {
+			"type": "string",
+			"format": "uuid"
+		},
+		"label": {
+			"type": "string"
+		},
+		"short_code": {
+			"type": "string",
+			"maxLength": 10
+		},
+		"website": {
+			"type": "string",
+			"format": "uri"
+		},
+		"age": {
+			"type": "integer"
+		},
+		"big_number": {
+			"type": "integer",
+			"format": "int64"
+		},
+		"score": {
+			"type": "number"
+		},
+		"is_active": {
+			"type": "boolean"
+		},
+		"birth_date": {
+			"type": "string",
+			"format": "date"
+		},
+		"created_at": {
+			"type": "string",
+			"format": "date-time"
+		},
+		"metadata": {
+			"type": "object"
+		},
+		"tags": {
+			"type": "array",
+			"items": {
+				"type": "string"
+			}
+		}
+	}
+}

@@ -1,0 +1,23 @@
+export const messages = {
+	welcome:
+		"Welcome to schemarr! Convert JSON Schemas to SQL, Zod, or TypeScript.",
+	converting: "Converting schema...",
+	success: "Conversion successful!",
+	error: "Error during conversion:",
+	fileNotFound: (file: string) => `File not found: ${file}`,
+	invalidSchema: "Invalid JSON Schema provided",
+	readingStdin: "Reading schema from stdin... Press Ctrl+D to finish input.",
+	writingFile: (file: string) => `Writing output to ${file}`,
+	watching: (file: string) => `Watching ${file} for changes...`,
+	fileChanged: (file: string) => `\nFile changed: ${file}`,
+	reconvert: "Reconverting...",
+	pressCtrlC: "Press Ctrl+C to stop watching",
+	inputRequired: "Input is required",
+	selectFormat: "Select output format:",
+	selectDialect: "Select SQL dialect:",
+	selectInlineStrategy: "How should inline objects be handled?",
+	selectRelationStrategy: "How should array references be handled?",
+	outputLocation: "Where should the output go?",
+	schemaFile: "Enter path to JSON Schema file:",
+	schemaJson: "Paste your JSON Schema (Ctrl+D to finish):",
+} as const;

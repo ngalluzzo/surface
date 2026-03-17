@@ -1,0 +1,51 @@
+{
+	"$schema": "http://json-schema.org/draft-07/schema#",
+	"title": "Company",
+	"type": "object",
+	"required": ["id", "name", "address"],
+	"properties": {
+		"id": {
+			"type": "string",
+			"format": "uuid"
+		},
+		"name": {
+			"type": "string"
+		},
+		"address": {
+			"type": "object",
+			"description": "Inline object without $ref — should become JSONB",
+			"properties": {
+				"street": { "type": "string" },
+				"city": { "type": "string" },
+				"zip": { "type": "string" }
+			}
+		},
+		"settings": {
+			"type": "object",
+			"description": "Unstructured object — should become JSONB"
+		},
+		"headquarters": {
+			"$ref": "#/definitions/Office",
+			"description": "$ref object — should become FK to separate table"
+		}
+	},
+	"definitions": {
+		"Office": {
+			"title": "Office",
+			"type": "object",
+			"required": ["id", "location"],
+			"properties": {
+				"id": {
+					"type": "string",
+					"format": "uuid"
+				},
+				"location": {
+					"type": "string"
+				},
+				"capacity": {
+					"type": "integer"
+				}
+			}
+		}
+	}
+}

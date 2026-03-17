@@ -1,0 +1,45 @@
+{
+	"$schema": "http://json-schema.org/draft-07/schema#",
+	"title": "NodeA",
+	"type": "object",
+	"required": ["id"],
+	"properties": {
+		"id": {
+			"type": "string",
+			"format": "uuid"
+		},
+		"sibling": {
+			"$ref": "#/definitions/NodeB"
+		}
+	},
+	"definitions": {
+		"NodeB": {
+			"title": "NodeB",
+			"type": "object",
+			"required": ["id"],
+			"properties": {
+				"id": {
+					"type": "string",
+					"format": "uuid"
+				},
+				"back_ref": {
+					"$ref": "#/definitions/NodeA"
+				}
+			}
+		},
+		"NodeA": {
+			"title": "NodeA",
+			"type": "object",
+			"required": ["id"],
+			"properties": {
+				"id": {
+					"type": "string",
+					"format": "uuid"
+				},
+				"sibling": {
+					"$ref": "#/definitions/NodeB"
+				}
+			}
+		}
+	}
+}

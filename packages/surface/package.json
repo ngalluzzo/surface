@@ -1,0 +1,65 @@
+{
+	"name": "surface",
+	"version": "0.1.0",
+	"type": "module",
+	"exports": {
+		".": {
+			"types": "./src/index.ts",
+			"bun": "./src/index.ts",
+			"default": "./dist/index.js"
+		},
+		"./client": {
+			"types": "./src/client/index.ts",
+			"bun": "./src/client/index.ts",
+			"default": "./dist/client/index.js"
+		},
+		"./client/react": {
+			"types": "./src/client/react.ts",
+			"bun": "./src/client/react.ts",
+			"default": "./dist/client/react.js"
+		},
+		"./job-client": {
+			"types": "./src/job-client/index.ts",
+			"bun": "./src/job-client/index.ts",
+			"default": "./dist/job-client/index.js"
+		},
+		"./event-client": {
+			"types": "./src/event-client/index.ts",
+			"bun": "./src/event-client/index.ts",
+			"default": "./dist/event-client/index.js"
+		}
+	},
+	"files": [
+		"dist",
+		"src"
+	],
+	"scripts": {
+		"typecheck": "tsc --noEmit",
+		"test": "bun test",
+		"build": "bun run clean && bun run build:pkg",
+		"build:pkg": "bun build ./src/index.ts ./src/client/index.ts ./src/client/react.ts ./src/job-client/index.ts ./src/event-client/index.ts --outdir ./dist --target node --external zod --external schemarr --external react --external graphql --external @tanstack/react-query",
+		"clean": "rm -rf ./dist"
+	},
+	"dependencies": {
+		"schemarr": "workspace:*",
+		"zod": "catalog:"
+	},
+	"peerDependencies": {
+		"@tanstack/react-query": ">=5.0.0",
+		"graphql": ">=16.0.0",
+		"react": ">=18.0.0",
+		"typescript": "^5.0.0"
+	},
+	"peerDependenciesMeta": {
+		"@tanstack/react-query": {
+			"optional": true
+		},
+		"react": {
+			"optional": true
+		}
+	},
+	"devDependencies": {
+		"@tanstack/react-query": "^5.0.0",
+		"graphql": "^16.0.0"
+	}
+}

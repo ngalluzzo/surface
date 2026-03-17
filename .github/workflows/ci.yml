@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Typecheck schemarr
+        run: cd packages/schemarr && bun run typecheck
+
+      - name: Typecheck surface
+        run: cd packages/surface && bun run typecheck
+
+      - name: Test schemarr
+        run: cd packages/schemarr && bun test
+
+      - name: Test surface
+        run: cd packages/surface && bun test
+
+      - name: Build schemarr
+        run: cd packages/schemarr && bun run build
+
+      - name: Build surface
+        run: cd packages/surface && bun run build

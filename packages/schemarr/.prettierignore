@@ -1,0 +1,51 @@
+# Dependencies
+node_modules
+pnpm-lock.yaml
+package-lock.json
+yarn.lock
+
+# Build outputs
+dist
+build
+out
+.next
+.nuxt
+.output
+.vercel
+.netlify
+
+# Cache
+.cache
+.parcel-cache
+.turbo
+.eslintcache
+
+# Coverage
+coverage
+.nyc_output
+
+# Environment
+.env
+.env.local
+.env*.local
+
+# Logs
+*.log
+logs
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode
+.idea
+
+# Generated files
+*.min.js
+*.min.css
+*.bundle.js
+*.chunk.js
+
+# Documentation
+CHANGELOG.md

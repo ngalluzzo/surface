@@ -1,0 +1,48 @@
+{
+	"$schema": "http://json-schema.org/draft-07/schema#",
+	"title": "Product",
+	"type": "object",
+	"required": ["id", "sku", "name", "price"],
+	"properties": {
+		"id": {
+			"type": "string",
+			"format": "uuid"
+		},
+		"sku": {
+			"type": "string",
+			"maxLength": 50,
+			"pattern": "^[A-Z]{2,4}-[0-9]{4,8}$",
+			"description": "Unique stock keeping unit"
+		},
+		"name": {
+			"type": "string",
+			"minLength": 1,
+			"maxLength": 200
+		},
+		"price": {
+			"type": "number",
+			"minimum": 0,
+			"exclusiveMinimum": true
+		},
+		"quantity": {
+			"type": "integer",
+			"minimum": 0,
+			"maximum": 999999
+		},
+		"weight_kg": {
+			"type": "number",
+			"minimum": 0
+		},
+		"rating": {
+			"type": "number",
+			"minimum": 0,
+			"maximum": 5
+		},
+		"email": {
+			"type": "string",
+			"format": "email",
+			"description": "Vendor contact — unique across products"
+		}
+	},
+	"x-unique": ["sku", "email"]
+}

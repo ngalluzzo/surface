@@ -1,0 +1,76 @@
+{
+	"$schema": "http://json-schema.org/draft-07/schema#",
+	"title": "CourseEnrollment",
+	"type": "object",
+	"required": ["courses", "students", "courseStudents"],
+	"properties": {
+		"courses": {
+			"type": "array",
+			"items": {
+				"$ref": "#/definitions/Course"
+			}
+		},
+		"students": {
+			"type": "array",
+			"items": {
+				"$ref": "#/definitions/Student"
+			}
+		},
+		"courseStudents": {
+			"type": "array",
+			"items": {
+				"$ref": "#/definitions/CourseStudent"
+			}
+		}
+	},
+	"definitions": {
+		"Course": {
+			"title": "Course",
+			"type": "object",
+			"required": ["id", "title"],
+			"properties": {
+				"id": {
+					"type": "string",
+					"format": "uuid"
+				},
+				"title": {
+					"type": "string",
+					"maxLength": 200
+				}
+			}
+		},
+		"Student": {
+			"title": "Student",
+			"type": "object",
+			"required": ["id", "name"],
+			"properties": {
+				"id": {
+					"type": "string",
+					"format": "uuid"
+				},
+				"name": {
+					"type": "string",
+					"maxLength": 100
+				}
+			}
+		},
+		"CourseStudent": {
+			"title": "CourseStudent",
+			"type": "object",
+			"required": ["course", "student"],
+			"properties": {
+				"course": {
+					"$ref": "#/definitions/Course"
+				},
+				"student": {
+					"$ref": "#/definitions/Student"
+				},
+				"enrolled_at": {
+					"type": "string",
+					"format": "date-time"
+				}
+			},
+			"uniqueItems": [["course", "student"]]
+		}
+	}
+}
