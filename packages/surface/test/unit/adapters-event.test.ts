@@ -114,6 +114,103 @@ describe("registerEventConsumers", () => {
 			(await import("../../src/index.js")).NonRetryableError,
 		);
 	});
+
+	test("bind can compose parsed payload and metadata into the operation input", async () => {
+		let received:
+			| {
+					id: string;
+					meta: {
+						source: string;
+						topic: string;
+					};
+			  }
+			| undefined;
+		const op = defineOperation({
+			name: "test.boundEvent",
+			schema: z.object({
+				id: z.string(),
+				meta: z.object({
+					source: z.string(),
+					topic: z.string(),
+				}),
+			}),
+			outputSchema: z.null(),
+			handler: async (payload) => {
+				received = payload;
+				return { ok: true as const, value: null };
+			},
+			expose: {
+				event: {
+					default: {
+						source: "sqs",
+						topic: "test.boundEvent",
+						parsePayload: (raw: unknown) =>
+							(raw as { detail: { id: string } }).detail,
+						bind: {
+							meta: {
+								source: "meta.source",
+								topic: "meta.topic",
+							},
+						},
+					},
+				},
+			},
+		});
+		const registry = defineRegistry("test", [op]);
+		const { transport, registered } = createMockEventTransport();
+		const ctx = createMockContext();
+		registerEventConsumers(registry, transport, ctx);
+
+		const def = registered[0];
+		await def?.handler({ detail: { id: "evt-1" } });
+
+		expect(received).toEqual({
+			id: "evt-1",
+			meta: {
+				source: "sqs",
+				topic: "test.boundEvent",
+			},
+		});
+	});
+
+	test("definition.parsePayload remains the raw parser and does not apply bind metadata", () => {
+		const op = defineOperation({
+			name: "test.eventParseContract",
+			schema: z.object({
+				id: z.string(),
+				meta: z.object({
+					source: z.string(),
+					topic: z.string(),
+				}),
+			}),
+			outputSchema: z.null(),
+			handler: async () => ({ ok: true as const, value: null }),
+			expose: {
+				event: {
+					default: {
+						source: "sqs",
+						topic: "test.eventParseContract",
+						parsePayload: (raw: unknown) =>
+							(raw as { detail: { id: string } }).detail,
+						bind: {
+							meta: {
+								source: "meta.source",
+								topic: "meta.topic",
+							},
+						},
+					},
+				},
+			},
+		});
+		const registry = defineRegistry("test", [op]);
+		const { transport, registered } = createMockEventTransport();
+		registerEventConsumers(registry, transport, createMockContext());
+
+		const def = registered[0];
+		expect(def?.parsePayload({ detail: { id: "evt-1" } })).toEqual({
+			id: "evt-1",
+		});
+	});
 });
 
 describe("buildEventMapFromRegistry", () => {

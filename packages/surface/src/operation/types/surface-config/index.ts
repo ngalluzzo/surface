@@ -10,6 +10,14 @@ import type { WebhookSurfaceConfig } from "./webhook";
 import type { WsSurfaceConfig } from "./ws";
 
 export type { BaseSurfaceConfig } from "./base";
+export type {
+	EventPayloadBinding,
+	HttpPayloadBinding,
+	PayloadBindingMapping,
+	PayloadBindingSource,
+	PayloadBindingTargetPath,
+	WebhookPayloadBinding,
+} from "./bind";
 export type { CliSurfaceConfig } from "./cli";
 export type { CronSurfaceConfig } from "./cron";
 export type { EventSurfaceConfig } from "./event";

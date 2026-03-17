@@ -239,6 +239,70 @@ describe("buildHttpHandlers", () => {
 		});
 	});
 
+	test("bind can compose body, path, query, and headers into one payload", async () => {
+		const op = defineOperation({
+			name: "test.boundHttp",
+			schema: z.object({
+				note: z.string(),
+				incidentId: z.string(),
+				page: z.string(),
+				meta: z.object({
+					requestId: z.string(),
+				}),
+			}),
+			outputSchema: z.object({
+				note: z.string(),
+				incidentId: z.string(),
+				page: z.string(),
+				meta: z.object({
+					requestId: z.string(),
+				}),
+			}),
+			handler: async (payload) => ({ ok: true as const, value: payload }),
+			expose: {
+				http: {
+					default: {
+						method: "POST" as const,
+						path: "/incidents/:id",
+						bind: {
+							path: { id: "incidentId" },
+							query: { page: "page" },
+							headers: { "x-request-id": "meta.requestId" },
+						},
+					},
+				},
+			},
+		});
+		const registry = defineRegistry("test", [op]);
+		const handlers = buildHttpHandlers(registry, ctx);
+		const handler = handlers.get("POST /incidents/:id");
+		if (!handler) throw new Error("Expected handler for POST /incidents/:id");
+
+		const res = await handler(
+			{
+				method: "POST",
+				path: "/incidents/inc-1",
+				body: { note: "hello" },
+				params: { id: "inc-1" },
+				query: { page: "2" },
+				headers: { "x-request-id": "req-123" },
+			},
+			ctx,
+		);
+
+		expect(res).toEqual({
+			status: 200,
+			body: {
+				note: "hello",
+				incidentId: "inc-1",
+				page: "2",
+				meta: {
+					requestId: "req-123",
+				},
+			},
+		});
+	});
+
 	test("throws on duplicate http routes", () => {
 		const opA = {
 			...createMinimalOp(),

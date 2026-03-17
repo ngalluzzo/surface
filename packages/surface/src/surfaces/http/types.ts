@@ -4,6 +4,8 @@ export interface HttpRequest {
 	method: string;
 	path: string;
 	body: unknown;
+	params?: Record<string, string | undefined>;
+	query?: Record<string, string | string[] | undefined>;
 	headers: Record<string, string | string[] | undefined>;
 	/** Optional AbortSignal (e.g. from request disconnect). When aborted, execution returns phase "aborted". */
 	signal?: AbortSignal;

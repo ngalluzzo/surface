@@ -11,9 +11,18 @@ import {
 	validateBindingSpecs,
 } from "../../registry/binding-validation-core";
 import { parseRaw } from "../shared/parse-raw";
+import { resolveBoundPayload } from "../shared/resolve-bound-payload";
 import type { WebhookHandler } from "./types";
 
 export type { WebhookHandler, WebhookRequest, WebhookResponse } from "./types";
+
+const WEBHOOK_BINDING_SOURCE_ORDER = [
+	"payload",
+	"body",
+	"headers",
+	"rawBody",
+	"meta",
+] as const;
 
 export const webhookBindingValidationSpecs = [
 	createDuplicateTargetBindingValidationSpec({
@@ -79,7 +88,23 @@ export function buildWebhookHandlers<C extends DefaultContext = DefaultContext>(
 			}
 
 			const { op, config } = binding;
-			const parsed = parseRaw(req.body, config.parsePayload);
+			const initialPayload = parseRaw(req.body, config.parsePayload);
+			const parsed = resolveBoundPayload({
+				bind: config.bind,
+				sources: {
+					payload: initialPayload,
+					body: req.body,
+					headers: req.headers,
+					rawBody: req.rawBody,
+					meta: {
+						provider: config.provider,
+						eventType: config.event,
+					},
+				},
+				sourceOrder: WEBHOOK_BINDING_SOURCE_ORDER,
+				primarySources: ["payload", "body"],
+				initialPayload,
+			});
 
 			const key =
 				useIdempotency &&

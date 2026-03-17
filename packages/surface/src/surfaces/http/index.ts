@@ -15,6 +15,7 @@ import {
 	registerBindingValidationSpecs,
 	validateBindingSpecs,
 } from "../../registry/binding-validation-core";
+import { resolveBoundPayload } from "../shared/resolve-bound-payload";
 import type { HttpHandler, HttpRequest } from "./types";
 
 export type { HttpHandler, HttpRequest, HttpResponse } from "./types";
@@ -89,6 +90,7 @@ const DEFAULT_STATUS: Record<string, number> = {
 };
 
 const DEFAULT_IDEMPOTENCY_HEADER = "idempotency-key";
+const HTTP_BINDING_SOURCE_ORDER = ["body", "path", "query", "headers"] as const;
 
 export interface BuildHttpHandlersOptions<
 	_C extends DefaultContext = DefaultContext,
@@ -104,6 +106,7 @@ function getIdempotencyKey(
 	req: HttpRequest,
 	headerName: string,
 	config: { idempotencyKey?: (payload: unknown) => string },
+	payload: unknown,
 	op: {
 		schema: {
 			safeParse: (raw: unknown) => { success: boolean; data?: unknown };
@@ -120,7 +123,7 @@ function getIdempotencyKey(
 				: undefined;
 	if (fromHeader) return fromHeader;
 	if (config.idempotencyKey) {
-		const parsed = op.schema.safeParse(req.body);
+		const parsed = op.schema.safeParse(payload);
 		if (parsed.success && parsed.data !== undefined)
 			return config.idempotencyKey(parsed.data);
 	}
@@ -156,11 +159,23 @@ export function buildHttpHandlers<C extends DefaultContext = DefaultContext>(
 		const route = `${config.method} ${config.path}`;
 
 		handlers.set(route, async (req) => {
+			const payload = resolveBoundPayload({
+				bind: config.bind,
+				sources: {
+					body: req.body,
+					path: req.params ?? {},
+					query: req.query ?? {},
+					headers: req.headers,
+				},
+				sourceOrder: HTTP_BINDING_SOURCE_ORDER,
+				primarySources: ["body"],
+				initialPayload: req.body,
+			});
 			const isStreamOp = op.outputChunkSchema != null;
 			const key =
 				!isStreamOp &&
 				useIdempotency &&
-				getIdempotencyKey(req, idempotencyHeader, config, op);
+				getIdempotencyKey(req, idempotencyHeader, config, payload, op);
 			const opts =
 				hooks || req.signal || key
 					? {
@@ -170,7 +185,7 @@ export function buildHttpHandlers<C extends DefaultContext = DefaultContext>(
 							binding,
 						}
 					: { binding };
-			const result = await exec(op, req.body, ctx, "http", config, opts);
+			const result = await exec(op, payload, ctx, "http", config, opts);
 
 			if (result.ok === false) {
 				const { error } = result;

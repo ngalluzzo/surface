@@ -252,6 +252,8 @@ Domain guards work the same: return `ok(delta)` to attach data; the runner merge
 
 Operations with optional **`outputChunkSchema`** are stream operations: the handler returns an `AsyncIterable`; the adapter responds with a `ReadableStream` of NDJSON (see [Streaming](#streaming)).
 
+HTTP bindings can also declare `bind` rules to map transport inputs into the operation payload. Supported sources are `body`, `path`, `query`, and `headers`. This extends the existing HTTP config rather than introducing a separate binding system.
+
 ```ts
 import { buildHttpHandlers, forSurface } from "@gooios/surface";
 
@@ -276,6 +278,24 @@ for (const [route, handler] of handlers) {
   });
 }
 ```
+
+```ts
+expose: {
+  http: {
+    default: {
+      method: "POST",
+      path: "/incidents/:id",
+      bind: {
+        path: { id: "incidentId" },
+        query: { expand: "options.expand" },
+        headers: { "x-request-id": "meta.requestId" },
+      },
+    },
+  },
+}
+```
+
+`bind` is optional. By default, HTTP uses `body` as the payload. Use `bind` when you need to compose `body` with path params, query values, or headers into one typed input.
 
 Default status code mapping (overridable per-operation):
 
@@ -346,7 +366,7 @@ expose: {
 
 ### Event — `registerEventConsumers`
 
-React to messages from SQS, Kafka, EventBridge, or any pluggable transport. `parsePayload` transforms the raw message envelope into the operation's typed input — the same pattern as webhooks.
+React to messages from SQS, Kafka, EventBridge, or any pluggable transport. `parsePayload` transforms the raw message envelope into the operation's typed input — the same pattern as webhooks. Event bindings can then optionally layer declarative `bind` rules on top of that parsed payload.
 
 ```ts
 expose: {
@@ -355,10 +375,16 @@ expose: {
       source:       "sqs",
       topic:        "registrations.requested",
       parsePayload: (message) => JSON.parse(message.body),
+      bind: {
+        payload: true,
+        meta: { topic: "meta.topic", source: "meta.source" },
+      },
     },
   },
 }
 ```
+
+For event bindings, supported sources are `payload`, `raw`, and `meta`. `payload` is the result of `parsePayload(...)` when provided. `parsePayload` remains the raw-envelope normalization step; `bind` is applied afterward by the adapter when it builds the final operation payload.
 
 ```ts
 import { registerEventConsumers } from "@gooios/surface";
@@ -384,10 +410,20 @@ expose: {
         paymentIntentId: raw.data.object.id,
         amount:          raw.data.object.amount,
       }),
+      bind: {
+        payload: true,
+        headers: { "stripe-signature": "meta.signature" },
+        meta: {
+          provider: "meta.provider",
+          eventType: "meta.eventType",
+        },
+      },
     },
   },
 }
 ```
+
+Webhook bindings support `payload`, `body`, `headers`, `rawBody`, and `meta` sources. `payload` is the result of `parsePayload(body)` when provided. `meta.provider` and `meta.eventType` come from the matched webhook binding, not directly from request fields. Keep `parsePayload` for imperative envelope normalization; use `bind` when you want a declarative composition layer on top.
 
 | Outcome            | Behaviour                                          |
 | ------------------ | -------------------------------------------------- |

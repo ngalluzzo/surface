@@ -9,11 +9,14 @@ import {
 } from "../../operation";
 import type { DefaultContext, OperationRegistry } from "../../operation/types";
 import { parseRaw } from "../shared/parse-raw";
+import { resolveBoundPayload } from "../shared/resolve-bound-payload";
 import type { EventConsumerDefinition, EventTransportLike } from "./types";
 import { NonRetryableError } from "./types";
 
 export type { EventConsumerDefinition, EventTransportLike } from "./types";
 export { NonRetryableError } from "./types";
+
+const EVENT_BINDING_SOURCE_ORDER = ["payload", "raw", "meta"] as const;
 
 export interface RegisterEventConsumersOptions<
 	_C extends DefaultContext = DefaultContext,
@@ -46,15 +49,33 @@ export function registerEventConsumers<
 	for (const binding of eventBindings) {
 		const { op, config } = binding;
 		if (op.outputChunkSchema != null) continue;
+		const parsePayload = (raw: unknown) => parseRaw(raw, config.parsePayload);
+		const resolvePayload = (raw: unknown) => {
+			const initialPayload = parsePayload(raw);
+			return resolveBoundPayload({
+				bind: config.bind,
+				sources: {
+					payload: initialPayload,
+					raw,
+					meta: {
+						source: config.source,
+						topic: config.topic,
+					},
+				},
+				sourceOrder: EVENT_BINDING_SOURCE_ORDER,
+				primarySources: ["payload", "raw"],
+				initialPayload,
+			});
+		};
 
 		const definition: EventConsumerDefinition = {
 			name: getSurfaceBindingLookupKey(binding),
 			topic: config.topic,
 			source: config.source,
-			parsePayload: config.parsePayload,
+			parsePayload,
 
 			handler: async (raw) => {
-				const parsed = parseRaw(raw, config.parsePayload);
+				const parsed = resolvePayload(raw);
 				const key =
 					useIdempotency &&
 					config.idempotencyKey &&
