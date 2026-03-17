@@ -98,6 +98,7 @@ export function buildWsHandlers<C extends DefaultContext = DefaultContext>(
 				payload,
 				ctx,
 				"ws",
+				op.expose.ws,
 				hooks ? { hooks } : undefined,
 			);
 

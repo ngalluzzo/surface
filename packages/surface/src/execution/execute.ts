@@ -1,5 +1,6 @@
 import type { ZodType } from "zod";
 import type {
+	BaseSurfaceConfig,
 	DefaultContext,
 	ExecutionError,
 	ExecutionState,
@@ -38,6 +39,7 @@ export async function execute<
 	raw: unknown,
 	ctx: C,
 	surface: ExposeSurface,
+	surfaceConfig: BaseSurfaceConfig<TPayload, C> | undefined,
 	options?: {
 		hooks?: LifecycleHooks;
 		signal?: AbortSignal;
@@ -46,7 +48,6 @@ export async function execute<
 		idempotencyKey?: string;
 	},
 ): Promise<Result<TOutput, ExecutionError>> {
-	const surfaceConfig = op.expose[surface];
 	const { contextToUse, controller, timeoutMs } = applyTimeout(
 		ctx,
 		surfaceConfig,
@@ -76,6 +77,7 @@ export async function execute<
 		raw,
 		context: contextToUse,
 		surface,
+		surfaceConfig,
 		op,
 		dryRun: options?.dryRun ?? false,
 	};

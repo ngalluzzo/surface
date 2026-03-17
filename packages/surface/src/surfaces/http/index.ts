@@ -147,7 +147,7 @@ export function buildHttpHandlers<C extends DefaultContext = DefaultContext>(
 							...(key && { idempotencyKey: key }),
 						}
 					: undefined;
-			const result = await exec(op, req.body, ctx, "http", opts);
+			const result = await exec(op, req.body, ctx, "http", config, opts);
 
 			if (!result.ok) {
 				const { error } = result;

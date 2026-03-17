@@ -49,11 +49,11 @@ export function createOps<C extends DefaultContext = DefaultContext>(
 		registry: OperationRegistry<C>,
 		surface: ExposeSurface,
 	) => OperationRegistry<C>;
-	execute: (
-		op: AnyOperation<C>,
-		raw: unknown,
-		ctx: C,
-		surface: ExposeSurface,
+		execute: (
+			op: AnyOperation<C>,
+			raw: unknown,
+			ctx: C,
+			surface: ExposeSurface,
 	) => Promise<
 		{ ok: true; value: unknown } | { ok: false; error: ExecutionError }
 	>;
@@ -90,7 +90,14 @@ export function createOps<C extends DefaultContext = DefaultContext>(
 			return forSurface<C>(registry, surface);
 		},
 		execute(op, raw, ctx, surface) {
-			return execute(op, raw, ctx, surface, hooks ? { hooks } : undefined);
+			return execute(
+				op,
+				raw,
+				ctx,
+				surface,
+				op.expose[surface],
+				hooks ? { hooks } : undefined,
+			);
 		},
 	};
 }

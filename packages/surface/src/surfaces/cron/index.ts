@@ -40,6 +40,7 @@ export function registerCronOperations<
 					payload,
 					ctx,
 					"cron",
+					config,
 					hooks ? { hooks } : undefined,
 				);
 

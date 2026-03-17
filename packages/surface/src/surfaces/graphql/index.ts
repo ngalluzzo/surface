@@ -114,6 +114,7 @@ export async function buildGraphQLSchema<
 				payload,
 				ctx,
 				"graphql",
+				config,
 				hooks ? { hooks } : undefined,
 			);
 			if (!result.ok) {

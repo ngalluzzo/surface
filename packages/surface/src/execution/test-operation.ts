@@ -55,6 +55,7 @@ export async function testOperation<
 		raw,
 		context: ctx,
 		surface: "test",
+		surfaceConfig: undefined,
 		op,
 		dryRun: options?.dryRun ?? false,
 	};

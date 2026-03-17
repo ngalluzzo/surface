@@ -1,6 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import type { ExecutionError, ExecutionMeta } from "../../src/index.js";
+import type {
+	DefaultContext,
+	ExecutionError,
+	ExecutionMeta,
+	Operation,
+} from "../../src/index.js";
 import { execute } from "../../src/index.js";
+import type { ZodType } from "zod";
 import { createMockContext } from "../fixtures/context.js";
 import { surfaceGuardFail } from "../fixtures/guards.js";
 import {
@@ -16,12 +22,22 @@ import {
 } from "../fixtures/operations.js";
 
 const ctx = createMockContext();
+const executeOnHttp = <
+	TPayload,
+	TOutput,
+	TError extends string,
+	C extends DefaultContext = DefaultContext,
+>(
+	op: Operation<ZodType, TPayload, TOutput, TError, C>,
+	raw: unknown,
+	options?: Parameters<typeof execute>[5],
+) => execute(op, raw, ctx as C, "http", op.expose.http, options);
 
 describe("execute", () => {
 	describe("happy path", () => {
 		test("valid payload runs handler and returns value", async () => {
 			const op = createMinimalOp();
-			const result = await execute(op, { id: "x" }, ctx, "http");
+			const result = await executeOnHttp(op, { id: "x" });
 			expect(result.ok).toBe(true);
 			if (!result.ok) return;
 			expect(result.value).toEqual({ id: "x" });
@@ -31,7 +47,7 @@ describe("execute", () => {
 	describe("phase 1 — surface guard", () => {
 		test("surface guard failure returns surface-guard error", async () => {
 			const op = createOpWithSurfaceGuard(surfaceGuardFail);
-			const result = await execute(op, { id: "x" }, ctx, "http");
+			const result = await executeOnHttp(op, { id: "x" });
 			expect(result.ok).toBe(false);
 			if (result.ok) return;
 			expect(result.error.phase).toBe("surface-guard");
@@ -44,7 +60,7 @@ describe("execute", () => {
 	describe("phase 2 — validation", () => {
 		test("invalid payload returns validation error with issues", async () => {
 			const op = createMinimalOp();
-			const result = await execute(op, { wrong: "shape" }, ctx, "http");
+			const result = await executeOnHttp(op, { wrong: "shape" });
 			expect(result.ok).toBe(false);
 			if (result.ok) return;
 			expect(result.error.phase).toBe("validation");
@@ -55,7 +71,7 @@ describe("execute", () => {
 
 		test("missing required field returns validation error", async () => {
 			const op = createMinimalOp();
-			const result = await execute(op, {}, ctx, "http");
+			const result = await executeOnHttp(op, {});
 			expect(result.ok).toBe(false);
 			if (result.ok) return;
 			expect(result.error.phase).toBe("validation");
@@ -65,7 +81,7 @@ describe("execute", () => {
 	describe("phase 3 — domain guard", () => {
 		test("domain guard failure returns domain-guard error", async () => {
 			const op = createOpWithFailingDomainGuard();
-			const result = await execute(op, { id: "x" }, ctx, "http");
+			const result = await executeOnHttp(op, { id: "x" });
 			expect(result.ok).toBe(false);
 			if (result.ok) return;
 			expect(result.error.phase).toBe("domain-guard");
@@ -75,31 +91,23 @@ describe("execute", () => {
 		});
 
 		test("omit override skips named domain guard so handler runs", async () => {
-			const result = await execute(opWithTwoGuards, { id: "y" }, ctx, "http");
+			const result = await executeOnHttp(opWithTwoGuards, { id: "y" });
 			expect(result.ok).toBe(true);
 			if (!result.ok) return;
 			expect(result.value).toEqual({ id: "y" });
 		});
 
 		test("omit override skips guard policy by name so handler runs", async () => {
-			const result = await execute(
-				opWithPolicyOmittedOnHttp,
-				{ id: "p" },
-				ctx,
-				"http",
-			);
+			const result = await executeOnHttp(opWithPolicyOmittedOnHttp, {
+				id: "p",
+			});
 			expect(result.ok).toBe(true);
 			if (!result.ok) return;
 			expect(result.value).toEqual({ id: "p" });
 		});
 
 		test("guard policy runs when not omitted and can fail", async () => {
-			const result = await execute(
-				opWithPolicyNotOmitted,
-				{ id: "q" },
-				ctx,
-				"http",
-			);
+			const result = await executeOnHttp(opWithPolicyNotOmitted, { id: "q" });
 			expect(result.ok).toBe(false);
 			if (result.ok) return;
 			expect(result.error.phase).toBe("domain-guard");
@@ -109,12 +117,7 @@ describe("execute", () => {
 		});
 
 		test("context enrichment: guard returns delta, handler receives merged context", async () => {
-			const result = await execute(
-				opWithContextEnrichment,
-				{ id: "e" },
-				ctx,
-				"http",
-			);
+			const result = await executeOnHttp(opWithContextEnrichment, { id: "e" });
 			expect(result.ok).toBe(true);
 			if (!result.ok) return;
 			expect(result.value).toEqual({ id: "e", session: "resolved" });
@@ -123,12 +126,7 @@ describe("execute", () => {
 
 	describe("phase 4 — handler", () => {
 		test("handler failure returns handler error", async () => {
-			const result = await execute(
-				opWithFailingHandler,
-				{ id: "z" },
-				ctx,
-				"http",
-			);
+			const result = await executeOnHttp(opWithFailingHandler, { id: "z" });
 			expect(result.ok).toBe(false);
 			if (result.ok) return;
 			expect(result.error.phase).toBe("handler");
@@ -138,12 +136,9 @@ describe("execute", () => {
 		});
 
 		test("output validation failure returns handler error with outputValidation and issues", async () => {
-			const result = await execute(
-				opWithOutputValidationFailure,
-				{ id: "z" },
-				ctx,
-				"http",
-			);
+			const result = await executeOnHttp(opWithOutputValidationFailure, {
+				id: "z",
+			});
 			expect(result.ok).toBe(false);
 			if (result.ok) return;
 			expect(result.error.phase).toBe("handler");
@@ -185,7 +180,7 @@ describe("execute", () => {
 					expect(meta.surface).toBe("http");
 				},
 			};
-			const result = await execute(op, { id: "x" }, ctx, "http", { hooks });
+			const result = await executeOnHttp(op, { id: "x" }, { hooks });
 			expect(result.ok).toBe(true);
 			expect(order).toEqual([
 				"start:surface-guard",
@@ -213,7 +208,7 @@ describe("execute", () => {
 					captured = meta;
 				},
 			};
-			const result = await execute(op, {}, ctx, "http", { hooks });
+			const result = await executeOnHttp(op, {}, { hooks });
 			expect(result.ok).toBe(false);
 			if (result.ok) return;
 			expect(result.error.phase).toBe("validation");
@@ -237,7 +232,7 @@ describe("execute", () => {
 					}
 				},
 			};
-			const result = await execute(op, { id: "x" }, ctx, "http", { hooks });
+			const result = await executeOnHttp(op, { id: "x" }, { hooks });
 			expect(result.ok).toBe(false);
 			expect(capturedPhase === "domain-guard").toBe(true);
 		});
@@ -252,13 +247,9 @@ describe("execute", () => {
 					}
 				},
 			};
-			const result = await execute(
-				opWithFailingHandler,
-				{ id: "z" },
-				ctx,
-				"http",
-				{ hooks },
-			);
+			const result = await executeOnHttp(opWithFailingHandler, { id: "z" }, {
+				hooks,
+			});
 			expect(result.ok).toBe(false);
 			expect(capturedError === "handler_error").toBe(true);
 		});
@@ -270,7 +261,7 @@ describe("execute", () => {
 					throw new Error("hook failed");
 				},
 			};
-			const result = await execute(op, { id: "x" }, ctx, "http", { hooks });
+			const result = await executeOnHttp(op, { id: "x" }, { hooks });
 			expect(result.ok).toBe(true);
 			if (!result.ok) return;
 			expect(result.value).toEqual({ id: "x" });
@@ -294,7 +285,7 @@ describe("execute", () => {
 					return { ok: true as const, value: payload };
 				},
 			};
-			const result = await execute(op, { id: "x" }, ctx, "http");
+			const result = await executeOnHttp(op, { id: "x" });
 			expect(result.ok).toBe(false);
 			if (result.ok) return;
 			expect(result.error.phase).toBe("timeout");
@@ -315,14 +306,14 @@ describe("execute", () => {
 					},
 				},
 			};
-			const result = await execute(op, { id: "x" }, ctx, "http");
+			const result = await executeOnHttp(op, { id: "x" });
 			expect(result.ok).toBe(true);
 			if (!result.ok) return;
 			expect(result.value).toEqual({ id: "x" });
 		});
 
 		test("when no timeout is set, execution runs without time limit", async () => {
-			const result = await execute(createMinimalOp(), { id: "x" }, ctx, "http");
+			const result = await executeOnHttp(createMinimalOp(), { id: "x" });
 			expect(result.ok).toBe(true);
 			if (!result.ok) return;
 			expect(result.value).toEqual({ id: "x" });
@@ -333,13 +324,9 @@ describe("execute", () => {
 		test("when options.signal is already aborted, returns aborted error", async () => {
 			const controller = new AbortController();
 			controller.abort();
-			const result = await execute(
-				createMinimalOp(),
-				{ id: "x" },
-				ctx,
-				"http",
-				{ signal: controller.signal },
-			);
+			const result = await executeOnHttp(createMinimalOp(), { id: "x" }, {
+				signal: controller.signal,
+			});
 			expect(result.ok).toBe(false);
 			if (result.ok) return;
 			expect(result.error.phase).toBe("aborted");
@@ -354,7 +341,7 @@ describe("execute", () => {
 					return { ok: true as const, value: payload };
 				},
 			};
-			const resultPromise = execute(op, { id: "x" }, ctx, "http", {
+			const resultPromise = executeOnHttp(op, { id: "x" }, {
 				signal: controller.signal,
 			});
 			setTimeout(() => controller.abort(), 10);
@@ -365,7 +352,7 @@ describe("execute", () => {
 		});
 
 		test("when no signal is passed, execution runs without external abort", async () => {
-			const result = await execute(createMinimalOp(), { id: "x" }, ctx, "http");
+			const result = await executeOnHttp(createMinimalOp(), { id: "x" });
 			expect(result.ok).toBe(true);
 			if (!result.ok) return;
 			expect(result.value).toEqual({ id: "x" });
@@ -382,9 +369,7 @@ describe("execute", () => {
 					return { ok: true as const, value: payload };
 				},
 			};
-			const result = await execute(op, { id: "x" }, ctx, "http", {
-				dryRun: true,
-			});
+			const result = await executeOnHttp(op, { id: "x" }, { dryRun: true });
 			expect(result.ok).toBe(true);
 			if (!result.ok) return;
 			expect(result.value).toBeUndefined();

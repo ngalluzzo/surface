@@ -76,7 +76,14 @@ export function buildWebhookHandlers<C extends DefaultContext = DefaultContext>(
 				hooks || key
 					? { ...(hooks && { hooks }), ...(key && { idempotencyKey: key }) }
 					: undefined;
-			const result = await exec(op, parsed, ctx, "webhook", opts);
+			const result = await exec(
+				op,
+				parsed,
+				ctx,
+				"webhook",
+				config,
+				opts,
+			);
 
 			if (!result.ok) {
 				console.error(`[webhook] operation ${op.name} failed:`, result.error);

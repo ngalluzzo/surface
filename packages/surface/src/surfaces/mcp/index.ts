@@ -61,6 +61,7 @@ export function buildMcpServer<C extends DefaultContext = DefaultContext>(
 					args,
 					ctx,
 					"mcp",
+					config,
 					hooks ? { hooks } : undefined,
 				);
 

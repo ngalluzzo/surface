@@ -65,7 +65,7 @@ export function registerEventConsumers<
 					hooks || key
 						? { ...(hooks && { hooks }), ...(key && { idempotencyKey: key }) }
 						: undefined;
-				const result = await exec(op, parsed, ctx, "event", opts);
+				const result = await exec(op, parsed, ctx, "event", config, opts);
 
 				if (!result.ok) {
 					const { error } = result;

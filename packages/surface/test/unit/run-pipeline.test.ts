@@ -55,6 +55,7 @@ describe("runPipeline", () => {
 			raw: { id: "p" },
 			context: ctx,
 			surface: "http",
+			surfaceConfig: undefined,
 			op,
 		};
 		const result = await runPipeline<Payload, Payload, string, DefaultContext>(
@@ -107,6 +108,7 @@ describe("runPipeline", () => {
 			raw: { id: "x" },
 			context: ctx,
 			surface: "test",
+			surfaceConfig: undefined,
 			op,
 		};
 		const result = await runPipeline<Payload, Payload, string, DefaultContext>(

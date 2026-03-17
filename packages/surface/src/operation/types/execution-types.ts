@@ -1,6 +1,7 @@
 import type { ZodType } from "zod";
 import type { DefaultContext } from "./default-context";
 import type { Operation } from "./operation-types";
+import type { BaseSurfaceConfig } from "./surface-config";
 import type { Surface } from "./surface-config";
 
 export type Phase =
@@ -48,6 +49,7 @@ export interface ExecutionState<
 	output?: TOutput;
 	context: C;
 	surface: Surface;
+	surfaceConfig: BaseSurfaceConfig<TPayload, C> | undefined;
 	op: Operation<ZodType, TPayload, TOutput, TError, C>;
 	dryRun?: boolean;
 }

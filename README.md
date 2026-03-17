@@ -37,7 +37,7 @@ This repo uses [Changesets](https://github.com/changesets/changesets) for versio
    ```
    Choose which package(s) changed and the version bump type (patch, minor, major). This creates a markdown file in `.changeset/`.
 
-2. **Version and update changelogs** (e.g. when preparing a release):
+2. **Version and update changelogs** (recommended before reviewing a release):
    ```bash
    bun run version
    ```
@@ -47,6 +47,6 @@ This repo uses [Changesets](https://github.com/changesets/changesets) for versio
    ```bash
    bun run release
    ```
-   Ensure both packages are built first (`bun run build` in each package). You must be logged in to npm (`npm login`) and have publish access.
+   `release` runs `bun run version` before building and publishing so the published package metadata does not retain workspace-local dependency specifiers. You must be logged in to npm (`npm login`) and have publish access.
 
 First-time publish order: publish **@gooios/schemarr** first, then **@gooios/surface** (since surface depends on schemarr).

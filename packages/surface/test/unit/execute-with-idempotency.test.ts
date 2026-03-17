@@ -23,7 +23,7 @@ describe("executeWithIdempotency", () => {
 		const store = createInMemoryIdempotencyStore();
 		const exec = executeWithIdempotency(store, 60_000);
 		const op = createMinimalOp();
-		const result1 = await exec(op, { id: "a" }, ctx, "http", {
+		const result1 = await exec(op, { id: "a" }, ctx, "http", undefined, {
 			idempotencyKey: "key-same",
 		});
 		expect(result1.ok).toBe(true);
@@ -31,7 +31,7 @@ describe("executeWithIdempotency", () => {
 		expect(result1.value).toEqual({ id: "a" });
 
 		// Second call with same key but different body — should return cached (id: "a")
-		const result2 = await exec(op, { id: "b" }, ctx, "http", {
+		const result2 = await exec(op, { id: "b" }, ctx, "http", undefined, {
 			idempotencyKey: "key-same",
 		});
 		expect(result2.ok).toBe(true);
@@ -43,12 +43,12 @@ describe("executeWithIdempotency", () => {
 		const store = createInMemoryIdempotencyStore();
 		const exec = executeWithIdempotency(store, 60_000);
 		const op = createMinimalOp();
-		const result1 = await exec(op, {}, ctx, "http", {
+		const result1 = await exec(op, {}, ctx, "http", undefined, {
 			idempotencyKey: "key-fail",
 		});
 		expect(result1.ok).toBe(false);
 
-		const result2 = await exec(op, { id: "x" }, ctx, "http", {
+		const result2 = await exec(op, { id: "x" }, ctx, "http", undefined, {
 			idempotencyKey: "key-fail",
 		});
 		expect(result2.ok).toBe(true);

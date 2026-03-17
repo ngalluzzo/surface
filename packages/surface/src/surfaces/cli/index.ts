@@ -52,7 +52,7 @@ export async function runCli<C extends DefaultContext = DefaultContext>(
 		hooks || dryRun
 			? { ...(hooks ? { hooks } : {}), ...(dryRun ? { dryRun: true } : {}) }
 			: undefined;
-	const result = await execute(op, raw, ctx, "cli", executeOptions);
+	const result = await execute(op, raw, ctx, "cli", config, executeOptions);
 
 	if (!result.ok) {
 		const { error } = result;

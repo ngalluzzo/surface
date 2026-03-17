@@ -1,7 +1,6 @@
 import type {
 	DefaultContext,
 	ExecutionError,
-	ExposeSurface,
 	Stage,
 } from "../../operation/types";
 import { resolveSurfaceGuards } from "../resolve-guards";
@@ -16,8 +15,7 @@ export function makeSurfaceGuardStage<
 	C extends DefaultContext,
 >(): Stage<TPayload, TOutput, TError, C> {
 	return async (state) => {
-		const { op, raw, context, surface } = state;
-		const surfaceConfig = op.expose[surface as ExposeSurface];
+		const { op, raw, context, surface, surfaceConfig } = state;
 		const guards = resolveSurfaceGuards(op.guards ?? [], surfaceConfig?.guards);
 
 		let ctx = context;

@@ -11,7 +11,7 @@
 		"changeset": "changeset",
 		"version": "changeset version",
 		"build:all": "bun run --filter='**' build",
-		"release": "bun run build:all && changeset publish"
+		"release": "bun run version && bun run build:all && changeset publish"
 	},
 	"catalog": {
 		"zod": "^4.3.6"

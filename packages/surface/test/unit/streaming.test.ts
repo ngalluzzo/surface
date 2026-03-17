@@ -10,6 +10,16 @@ import {
 import { createMockContext } from "../fixtures/context.js";
 
 const ctx = createMockContext();
+const executeOnHttp = <
+	TPayload,
+	TOutput,
+	TError extends string,
+	C extends DefaultContext = DefaultContext,
+>(
+	op: Operation<z.ZodType, TPayload, TOutput, TError, C>,
+	raw: unknown,
+	options?: Parameters<typeof execute>[5],
+) => execute(op, raw, ctx as C, "http", op.expose.http, options);
 
 const chunkSchema = z.object({ index: z.number(), value: z.string() });
 type Chunk = z.infer<typeof chunkSchema>;
@@ -47,7 +57,7 @@ describe("streaming operations", () => {
 				expose: { http: { method: "POST", path: "/stream" } },
 			};
 
-			const result = await execute(op, { id: "3" }, ctx, "http");
+			const result = await executeOnHttp(op, { id: "3" });
 			expect(result.ok).toBe(true);
 			if (!result.ok) return;
 			expect(
@@ -80,7 +90,7 @@ describe("streaming operations", () => {
 				expose: { http: { method: "POST", path: "/bad" } },
 			};
 
-			const result = await execute(op, { id: "x" }, ctx, "http");
+			const result = await executeOnHttp(op, { id: "x" });
 			expect(result.ok).toBe(false);
 			if (result.ok) return;
 			expect(result.error.phase).toBe("handler");

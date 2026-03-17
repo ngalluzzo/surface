@@ -2,6 +2,7 @@ import type { ZodType } from "zod";
 import { execute } from "../execution/execute";
 import type { Result } from "../execution/result";
 import type {
+	BaseSurfaceConfig,
 	DefaultContext,
 	ExecutionError,
 	ExposeSurface,
@@ -30,6 +31,7 @@ export function executeWithIdempotency(
 		raw: unknown,
 		ctx: C,
 		surface: ExposeSurface,
+		surfaceConfig: BaseSurfaceConfig<TPayload, C> | undefined,
 		options?: {
 			hooks?: LifecycleHooks;
 			signal?: AbortSignal;
@@ -39,7 +41,7 @@ export function executeWithIdempotency(
 	): Promise<Result<TOutput, ExecutionError>> => {
 		const key = options?.idempotencyKey;
 		if (!key) {
-			return execute(op, raw, ctx, surface, options);
+			return execute(op, raw, ctx, surface, surfaceConfig, options);
 		}
 
 		const cached = await store.get(op.name, key);
@@ -47,7 +49,14 @@ export function executeWithIdempotency(
 			return cached as Result<TOutput, ExecutionError>;
 		}
 
-		const result = await execute(op, raw, ctx, surface, options);
+		const result = await execute(
+			op,
+			raw,
+			ctx,
+			surface,
+			surfaceConfig,
+			options,
+		);
 		if (result.ok) {
 			await store.set(op.name, key, result, ttlMs);
 		}
