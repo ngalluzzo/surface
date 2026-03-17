@@ -226,6 +226,38 @@ describe("validateBindings", () => {
 		expect(issues[0]?.targetKind).toBe("command");
 	});
 
+	test("returns structured issues for invalid explicit graphql fields", () => {
+		const op = {
+			...makeOp("test.invalidGraphqlField", { http: false, cli: false, job: false }),
+			expose: {
+				graphql: {
+					default: { type: "mutation" as const, field: "bad-field" },
+				},
+			},
+		} satisfies AnyOperation;
+		const registry = new Map([
+			[op.name, op],
+		]) as OperationRegistry<DefaultContext>;
+
+		const issues = validateBindings(registry);
+		expect(issues).toHaveLength(1);
+		expect(issues[0]).toMatchObject({
+			code: "invalid_target",
+			surface: "graphql",
+			targetKind: "field",
+			target: "bad-field",
+			bindings: [
+				{
+					key: "test.invalidGraphqlField",
+					ref: {
+						operation: "test.invalidGraphqlField",
+						binding: "default",
+					},
+				},
+			],
+		});
+	});
+
 	test("BindingValidationError carries structured issues", () => {
 		const error = new BindingValidationError([
 			{

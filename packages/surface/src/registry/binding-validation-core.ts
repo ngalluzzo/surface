@@ -2,14 +2,14 @@ import { bindingMeta, type BindingDefinition, type BindingMeta } from "../bindin
 import type { ExposeSurface } from "../operation/types";
 import type { NormalizedSurfaceBinding } from "./normalize-surface-bindings";
 
-export type BindingValidationIssueCode = "duplicate_target";
+export type BindingValidationIssueCode = "duplicate_target" | "invalid_target";
 
 export interface BindingValidationIssue {
 	code: BindingValidationIssueCode;
 	surface: ExposeSurface;
 	targetKind: string;
 	target: string;
-	bindings: [BindingMeta, BindingMeta];
+	bindings: BindingMeta[];
 	message: string;
 }
 

@@ -9,6 +9,7 @@ import {
 	GraphQLSchema,
 	GraphQLString,
 } from "graphql";
+import { bindingMeta } from "../../bindings";
 import { execute, getHooks } from "../../execution";
 import type { OperationRegistryWithHooks } from "../../operation";
 import {
@@ -22,11 +23,14 @@ import type {
 } from "../../operation/types";
 import {
 	assertNoBindingValidationIssues,
+	type BindingValidationSpec,
 	createDuplicateTargetBindingValidationSpec,
 	registerBindingValidationSpecs,
 	validateBindingSpecs,
 } from "../../registry/binding-validation-core";
 import type { NormalizedSurfaceBinding } from "../../registry";
+
+const GRAPHQL_FIELD_IDENTIFIER_PATTERN = /^[_A-Za-z][_0-9A-Za-z]*$/;
 
 function executionErrorToGraphQLError(error: ExecutionError): GraphQLError {
 	let message: string;
@@ -64,6 +68,10 @@ function sanitizeGraphQLFieldIdentifier(value: string): string {
 	return /^[A-Za-z_]/.test(sanitized) ? sanitized : `_${sanitized}`;
 }
 
+function isValidGraphQLFieldIdentifier(value: string): boolean {
+	return GRAPHQL_FIELD_IDENTIFIER_PATTERN.test(value);
+}
+
 function getGraphQLFieldName<C extends DefaultContext = DefaultContext>(
 	binding: NormalizedSurfaceBinding<"graphql", C>,
 ): string {
@@ -79,7 +87,41 @@ function getGraphQLFieldName<C extends DefaultContext = DefaultContext>(
 	return `${base}_${sanitizeGraphQLFieldIdentifier(binding.bindingName)}`;
 }
 
-export const graphqlBindingValidationSpecs = [
+export const graphqlBindingValidationSpecs: readonly BindingValidationSpec[] = [
+	{
+		surface: "graphql",
+		validate: (bindings) =>
+			bindings.flatMap((binding) => {
+				if (binding.surface !== "graphql") {
+					return [];
+				}
+
+				const graphqlBinding = binding as NormalizedSurfaceBinding<
+					"graphql",
+					any
+				>;
+				const explicitField = graphqlBinding.config.field;
+				if (
+					explicitField == null ||
+					isValidGraphQLFieldIdentifier(explicitField)
+				) {
+					return [];
+				}
+
+				return [
+					{
+						code: "invalid_target",
+						surface: "graphql",
+						targetKind: "field",
+						target: explicitField,
+						bindings: [
+							bindingMeta(graphqlBinding.ref, graphqlBinding.key),
+						],
+						message: `Invalid graphql field "${explicitField}" for binding "${graphqlBinding.key}"`,
+					},
+				];
+			}),
+	},
 	createDuplicateTargetBindingValidationSpec({
 		surface: "graphql",
 		targetKind: "field",

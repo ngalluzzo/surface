@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import { graphql } from "graphql";
-import { buildGraphQLSchema, defineOperation } from "../../src/index.js";
+import {
+	BindingValidationError,
+	buildGraphQLSchema,
+	defineOperation,
+} from "../../src/index.js";
 import { createMockContext } from "../fixtures/context.js";
 import { createRegistryWithMinimalOp } from "../fixtures/operations.js";
 import { z } from "zod";
@@ -143,5 +147,46 @@ describe("buildGraphQLSchema", () => {
 		await expect(buildGraphQLSchema(registry, ctx)).rejects.toThrow(
 			'Duplicate graphql field "mutation:sharedField"',
 		);
+	});
+
+	test("throws structured validation errors for invalid explicit graphql fields", async () => {
+		const op = defineOperation({
+			name: "testGraphInvalidField",
+			schema: z.object({ id: z.string() }),
+			outputSchema: z.object({ id: z.string() }),
+			handler: async (payload: { id: string }) => ({
+				ok: true as const,
+				value: payload,
+			}),
+			expose: {
+				graphql: {
+					default: { type: "mutation", field: "bad-field" },
+				},
+			},
+		});
+		const registry = new Map([
+			[op.name, op],
+		]) as import("../../src/index.js").OperationRegistry<
+			import("../../src/index.js").DefaultContext
+		>;
+		const ctx = createMockContext();
+
+		try {
+			await buildGraphQLSchema(registry, ctx);
+			throw new Error("Expected buildGraphQLSchema to throw");
+		} catch (error) {
+			expect(error).toBeInstanceOf(BindingValidationError);
+			expect((error as BindingValidationError).issues).toMatchObject([
+				{
+					code: "invalid_target",
+					surface: "graphql",
+					targetKind: "field",
+					target: "bad-field",
+				},
+			]);
+			expect((error as Error).message).toContain(
+				'Invalid graphql field "bad-field"',
+			);
+		}
 	});
 });
