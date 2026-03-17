@@ -1,3 +1,4 @@
+import { convertZodToGraphQL } from "@gooios/schemarr";
 import {
 	GraphQLError,
 	type GraphQLFieldConfig,
@@ -8,7 +9,6 @@ import {
 	GraphQLSchema,
 	GraphQLString,
 } from "graphql";
-import { convertZodToGraphQL } from "@gooios/schemarr";
 import { execute, getHooks } from "../../execution";
 import type { OperationRegistryWithHooks } from "../../operation";
 import type {
