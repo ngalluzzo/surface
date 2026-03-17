@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { z } from "zod";
-import type { AnyOperation } from "../../src/index.js";
+import type { AnyOperation, DefaultContext, OperationRegistry } from "../../src/index.js";
 import {
+	BindingValidationError,
 	composeRegistries,
 	defineGuardPolicy,
 	defineRegistry,
@@ -9,6 +10,8 @@ import {
 	normalizeOperationSurfaceBindings,
 	resolveOperationSurfaceBinding,
 	normalizeSurfaceBindings,
+	validateBindings,
+	validateSurfaceBindings,
 } from "../../src/index.js";
 
 const schema = z.object({ id: z.string() });
@@ -119,8 +122,8 @@ describe("normalizeSurfaceBindings", () => {
 			"default",
 		]);
 		expect(bindings.map((binding) => binding.bindingId)).toEqual([
-			"test.httpOnly:default",
-			"test.both:default",
+			"test.httpOnly",
+			"test.both",
 		]);
 		expect(bindings.map((binding) => binding.operationName)).toEqual([
 			"test.httpOnly",
@@ -154,7 +157,7 @@ describe("normalizeSurfaceBindings", () => {
 			"admin",
 		]);
 		expect(bindings.map((binding) => binding.bindingId)).toEqual([
-			"test.multi:default",
+			"test.multi",
 			"test.multi:admin",
 		]);
 		expect(resolveOperationSurfaceBinding(op, "http")?.config.path).toBe(
@@ -163,5 +166,90 @@ describe("normalizeSurfaceBindings", () => {
 		expect(
 			resolveOperationSurfaceBinding(op, "http", "admin")?.config.path,
 		).toBe("/multi/admin");
+	});
+});
+
+describe("validateBindings", () => {
+	test("returns structured issues for duplicate binding targets", () => {
+		const opA = {
+			...makeOp("test.duplicateA", { http: true }),
+			expose: {
+				http: {
+					default: { method: "POST" as const, path: "/duplicate" },
+				},
+			},
+		} satisfies AnyOperation;
+		const opB = {
+			...makeOp("test.duplicateB", { http: true }),
+			expose: {
+				http: {
+					default: { method: "POST" as const, path: "/duplicate" },
+				},
+			},
+		} satisfies AnyOperation;
+		const registry = new Map([
+			[opA.name, opA],
+			[opB.name, opB],
+		]) as OperationRegistry<DefaultContext>;
+
+		const issues = validateBindings(registry);
+		expect(issues).toHaveLength(1);
+		expect(issues[0]).toMatchObject({
+			code: "duplicate_target",
+			surface: "http",
+			targetKind: "route",
+			target: "POST /duplicate",
+			bindings: [
+				{ key: "test.duplicateA", ref: { operation: "test.duplicateA", binding: "default" } },
+				{ key: "test.duplicateB", ref: { operation: "test.duplicateB", binding: "default" } },
+			],
+		});
+	});
+
+	test("can validate one surface at a time", () => {
+		const opA = makeOp("test.cliA", { cli: true });
+		const opB = makeOp("test.cliA2", { cli: true });
+		opB.expose.cli = {
+			default: {
+				command: "test.cliA",
+				description: "duplicate cli command",
+			},
+		};
+		const registry = new Map([
+			[opA.name, opA],
+			[opB.name, opB],
+		]) as OperationRegistry<DefaultContext>;
+
+		const issues = validateSurfaceBindings(registry, "cli");
+		expect(issues).toHaveLength(1);
+		expect(issues[0]?.surface).toBe("cli");
+		expect(issues[0]?.targetKind).toBe("command");
+	});
+
+	test("BindingValidationError carries structured issues", () => {
+		const error = new BindingValidationError([
+			{
+				code: "duplicate_target",
+				surface: "http",
+				targetKind: "route",
+				target: "POST /duplicate",
+				bindings: [
+					{
+						key: "test.a",
+						ref: { operation: "test.a", binding: "default" },
+					},
+					{
+						key: "test.b",
+						ref: { operation: "test.b", binding: "default" },
+					},
+				],
+				message:
+					'Duplicate http route "POST /duplicate" for bindings "test.a" and "test.b"',
+			},
+		]);
+
+		expect(error.name).toBe("BindingValidationError");
+		expect(error.issues).toHaveLength(1);
+		expect(error.message).toContain('Duplicate http route "POST /duplicate"');
 	});
 });

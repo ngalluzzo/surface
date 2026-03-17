@@ -7,9 +7,26 @@ import type {
 	ExecutionError,
 	OperationRegistry,
 } from "../../operation/types";
+import {
+	assertNoBindingValidationIssues,
+	createDuplicateTargetBindingValidationSpec,
+	registerBindingValidationSpecs,
+	validateBindingSpecs,
+} from "../../registry/binding-validation-core";
 import type { McpServerLike, McpToolDefinition } from "./types";
 
 export type { McpServerLike, McpToolDefinition } from "./types";
+
+export const mcpBindingValidationSpecs = [
+	createDuplicateTargetBindingValidationSpec({
+		surface: "mcp",
+		targetKind: "tool",
+		filter: (binding) => binding.op.outputChunkSchema == null,
+		select: (binding) => binding.config.tool,
+	}),
+] as const;
+
+registerBindingValidationSpecs(mcpBindingValidationSpecs);
 
 function formatExecutionError(error: ExecutionError): string {
 	switch (error.phase) {
@@ -42,12 +59,16 @@ export function buildMcpServer<C extends DefaultContext = DefaultContext>(
 	server: McpServerLike,
 	ctx: C,
 ): void {
-	const mcpBindings = normalizeSurfaceBindings(registry, "mcp");
+	const mcpBindings = normalizeSurfaceBindings(registry, "mcp").filter(
+		(binding) => binding.op.outputChunkSchema == null,
+	);
+	assertNoBindingValidationIssues(
+		validateBindingSpecs(mcpBindings, [...mcpBindingValidationSpecs]),
+	);
 	const hooks = "hooks" in registry ? getHooks(registry) : undefined;
 
 	for (const binding of mcpBindings) {
 		const { op, config } = binding;
-		if (op.outputChunkSchema != null) continue;
 		const inputSchema = z.toJSONSchema(op.schema) as Record<string, unknown>;
 
 		const definition: McpToolDefinition = {
@@ -61,7 +82,10 @@ export function buildMcpServer<C extends DefaultContext = DefaultContext>(
 					ctx,
 					"mcp",
 					config,
-					hooks ? { hooks } : undefined,
+					{
+						...(hooks ? { hooks } : {}),
+						binding,
+					},
 				);
 
 				if (!result.ok) {

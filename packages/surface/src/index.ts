@@ -1,5 +1,16 @@
 // Result
 
+// Bindings
+export {
+	DEFAULT_BINDING_NAME,
+	bindingMeta,
+	bindingRef,
+	isBindingRef,
+	parseBindingKey,
+	serializeBindingRef,
+} from "./bindings";
+export type { BindingDefinition, BindingMeta, BindingRef } from "./bindings";
+
 // Execution
 export { execute, getHooks, testOperation } from "./execution";
 export type { Result } from "./execution/result";
@@ -11,6 +22,8 @@ export {
 	executeWithIdempotency,
 } from "./idempotency";
 export type {
+	BindingValidationIssue,
+	BindingValidationIssueCode,
 	CreateOpsOptions,
 	NormalizedSurfaceBinding,
 	OperationRegistryWithHooks,
@@ -20,7 +33,10 @@ export type {
 } from "./operation";
 // Define & registry & createOps
 export {
+	assertNoBindingValidationIssues,
+	BindingValidationError,
 	composeRegistries,
+	collectDuplicateTargetIssues,
 	createOps,
 	createSchemaRegistry,
 	defaultRegistry,
@@ -29,11 +45,15 @@ export {
 	defineRegistry,
 	exportSchemas,
 	forSurface,
+	formatBindingValidationIssue,
+	formatBindingValidationIssues,
 	getSurfaceBindingLookupKey,
 	normalizeOperationSurfaceBindings,
 	resolveOperationSurfaceBinding,
 	normalizeSurfaceBindings,
 	registerOperationSchema,
+	validateBindings,
+	validateSurfaceBindings,
 } from "./operation";
 // Types
 export type {
@@ -100,8 +120,10 @@ export type {
 } from "./surfaces";
 // Surfaces
 export {
+	buildEventBindingsFromRegistry,
 	buildEventMapFromRegistry,
 	buildGraphQLSchema,
+	buildHttpBindingsFromRegistry,
 	buildHttpHandlers,
 	buildHttpMapFromRegistry,
 	buildMcpServer,

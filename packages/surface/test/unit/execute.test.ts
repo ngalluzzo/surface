@@ -32,14 +32,20 @@ const executeOnHttp = <
 	raw: unknown,
 	options?: Parameters<typeof execute>[5],
 ) =>
-	execute(
-		op,
-		raw,
-		ctx as C,
-		"http",
-		resolveOperationSurfaceBinding(op, "http")?.config,
-		options,
-	);
+	(() => {
+		const binding = resolveOperationSurfaceBinding(op, "http");
+		return execute(
+			op,
+			raw,
+			ctx as C,
+			"http",
+			binding?.config,
+			{
+				...(options ?? {}),
+				...(binding ? { binding } : {}),
+			},
+		);
+	})();
 
 describe("execute", () => {
 	describe("happy path", () => {
@@ -167,25 +173,21 @@ describe("execute", () => {
 			const op = createMinimalOp();
 			const order: string[] = [];
 			const phases: string[] = [];
+			const bindingKeys = new Set<string>();
 			const hooks = {
-				onPhaseStart: (meta: {
-					operation: { name: string };
-					phase: string;
-					surface: string;
-				}) => {
+				onPhaseStart: (meta: ExecutionMeta) => {
 					order.push(`start:${meta.phase}`);
 					phases.push(meta.phase);
+					if (meta.binding) {
+						bindingKeys.add(meta.binding.key);
+					}
 				},
-				onPhaseEnd: (meta: {
-					operation: { name: string };
-					phase: string;
-					surface: string;
-					durationMs: number;
-				}) => {
+				onPhaseEnd: (meta: ExecutionMeta & { durationMs: number }) => {
 					order.push(`end:${meta.phase}`);
 					expect(meta.durationMs).toBeGreaterThanOrEqual(0);
 					expect(meta.operation.name).toBe("test.echo");
 					expect(meta.surface).toBe("http");
+					expect(meta.binding?.key).toBe("test.echo");
 				},
 			};
 			const result = await executeOnHttp(op, { id: "x" }, { hooks });
@@ -206,6 +208,7 @@ describe("execute", () => {
 				"domain-guard",
 				"handler",
 			]);
+			expect([...bindingKeys]).toEqual(["test.echo"]);
 		});
 
 		test("onError called with correct phase and error on validation failure", async () => {

@@ -1,4 +1,6 @@
 export type {
+	BindingValidationIssue,
+	BindingValidationIssueCode,
 	NormalizedSurfaceBinding,
 	OperationRegistryWithHooks,
 	SchemaMetadata,
@@ -6,10 +8,15 @@ export type {
 	SchemaRegistryZodRegistry,
 } from "../registry";
 export {
+	assertNoBindingValidationIssues,
+	BindingValidationError,
 	composeRegistries,
+	collectDuplicateTargetIssues,
 	createSchemaRegistry,
 	defaultRegistry,
 	defineRegistry,
+	formatBindingValidationIssue,
+	formatBindingValidationIssues,
 	exportSchemas,
 	forSurface,
 	getSurfaceBindingLookupKey,
@@ -17,6 +24,8 @@ export {
 	resolveOperationSurfaceBinding,
 	normalizeSurfaceBindings,
 	registerOperationSchema,
+	validateBindings,
+	validateSurfaceBindings,
 } from "../registry";
 export type { CreateOpsOptions } from "./create-ops";
 export { createOps } from "./create-ops";

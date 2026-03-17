@@ -1,4 +1,5 @@
 import type { ZodType, z } from "zod";
+import type { BindingRef } from "../bindings";
 import { execute } from "../execution";
 import {
 	composeRegistries,
@@ -50,15 +51,15 @@ export function createOps<C extends DefaultContext = DefaultContext>(
 		registry: OperationRegistry<C>,
 		surface: ExposeSurface,
 	) => OperationRegistry<C>;
-	execute: (
-		op: AnyOperation<C>,
-		raw: unknown,
-		ctx: C,
-		surface: ExposeSurface,
-		bindingName?: string,
-	) => Promise<
-		{ ok: true; value: unknown } | { ok: false; error: ExecutionError }
-	>;
+		execute: (
+			op: AnyOperation<C>,
+			raw: unknown,
+			ctx: C,
+			surface: ExposeSurface,
+			bindingName?: string | BindingRef,
+		) => Promise<
+			{ ok: true; value: unknown } | { ok: false; error: ExecutionError }
+		>;
 } {
 	const schemaRegistry = options?.schemaRegistry;
 	const hooks = options?.hooks;
@@ -92,7 +93,24 @@ export function createOps<C extends DefaultContext = DefaultContext>(
 			return forSurface<C>(registry, surface);
 		},
 		execute(op, raw, ctx, surface, bindingName) {
-			const binding = resolveOperationSurfaceBinding(op, surface, bindingName);
+			const resolvedBindingName =
+				typeof bindingName === "string"
+					? bindingName
+					: bindingName?.binding;
+			if (
+				bindingName != null &&
+				typeof bindingName !== "string" &&
+				bindingName.operation !== op.name
+			) {
+				throw new Error(
+					`Binding ref operation "${bindingName.operation}" does not match operation "${op.name}"`,
+				);
+			}
+			const binding = resolveOperationSurfaceBinding(
+				op,
+				surface,
+				resolvedBindingName,
+			);
 			if (!binding) {
 				throw new Error(
 					`Operation "${op.name}" is not exposed on the ${surface} surface`,
@@ -104,7 +122,10 @@ export function createOps<C extends DefaultContext = DefaultContext>(
 				ctx,
 				surface,
 				binding.config,
-				hooks ? { hooks } : undefined,
+				{
+					...(hooks ? { hooks } : {}),
+					binding,
+				},
 			);
 		},
 	};

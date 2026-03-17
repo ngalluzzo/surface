@@ -1,3 +1,4 @@
+import type { BindingDefinition, BindingRef } from "../bindings";
 import type { Result } from "../execution/result";
 import type { ExecutionError } from "../operation/types";
 
@@ -24,6 +25,16 @@ export type HttpMap<R extends RegistryContract> = {
 	[K in keyof R]: { method: string; path: string };
 };
 
+export interface HttpBindingDefinition<TKey extends string = string>
+	extends BindingDefinition<TKey> {
+	method: string;
+	path: string;
+}
+
+export type HttpBindings<R extends RegistryContract> = {
+	[K in keyof R]: HttpBindingDefinition<K & string>;
+};
+
 /**
  * Options for createClient. httpMap provides method/path per binding key at runtime.
  */
@@ -31,8 +42,10 @@ export interface CreateClientOptions<R extends RegistryContract> {
 	baseUrl: string;
 	/** Optional headers (e.g. Authorization). Called per request. */
 	headers?: () => Record<string, string>;
-	/** Method and path for each operation. Must match the Registry keys. */
-	httpMap: HttpMap<R>;
+	/** Preferred binding definitions keyed by serialized binding key. */
+	bindings?: HttpBindings<R>;
+	/** Backward-compatible method/path map keyed by serialized binding key. */
+	httpMap?: HttpMap<R>;
 }
 
 /**
@@ -42,4 +55,20 @@ export type ClientMap<R extends RegistryContract> = {
 	[K in keyof R]: (
 		input: R[K]["input"],
 	) => Promise<Result<R[K]["output"], ExecutionError>>;
+};
+
+export interface ClientInvoke<R extends RegistryContract> {
+	<K extends keyof R>(
+		binding: K | HttpBindingDefinition<K & string>,
+		input: R[K]["input"],
+	): Promise<Result<R[K]["output"], ExecutionError>>;
+	(
+		binding: BindingRef,
+		input: unknown,
+	): Promise<Result<unknown, ExecutionError>>;
+}
+
+export type HttpClient<R extends RegistryContract> = ClientMap<R> & {
+	bindings: HttpBindings<R>;
+	invoke: ClientInvoke<R>;
 };

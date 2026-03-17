@@ -12,6 +12,19 @@ export {
 	normalizeSurfaceBindings,
 } from "./normalize-surface-bindings";
 export type {
+	BindingValidationIssue,
+	BindingValidationIssueCode,
+} from "./validate-bindings";
+export {
+	assertNoBindingValidationIssues,
+	BindingValidationError,
+	collectDuplicateTargetIssues,
+	formatBindingValidationIssue,
+	formatBindingValidationIssues,
+	validateBindings,
+	validateSurfaceBindings,
+} from "./validate-bindings";
+export type {
 	SchemaMetadata,
 	SchemaRegistryInstance,
 	SchemaRegistryZodRegistry,

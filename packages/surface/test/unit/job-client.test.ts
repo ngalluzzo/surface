@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { bindingRef } from "../../src/index.js";
 import { createJobClient } from "../../src/job-client/index.js";
 
 type TestRegistry = {
@@ -55,5 +56,20 @@ describe("createJobClient", () => {
 		);
 
 		expect(receivedOptions?.idempotencyKey).toBe("process:x");
+	});
+
+	test("enqueue accepts binding refs", async () => {
+		let receivedName: string | null = null;
+
+		const enqueue = {
+			async enqueue(name: string) {
+				receivedName = name;
+			},
+		};
+
+		const client = createJobClient<TestRegistry>(enqueue);
+		await client.enqueue(bindingRef("jobs.process", "backfill"), { id: "x" });
+
+		expect(String(receivedName)).toBe("jobs.process:backfill");
 	});
 });

@@ -20,6 +20,13 @@ import type {
 	ExecutionError,
 	OperationRegistry,
 } from "../../operation/types";
+import {
+	assertNoBindingValidationIssues,
+	createDuplicateTargetBindingValidationSpec,
+	registerBindingValidationSpecs,
+	validateBindingSpecs,
+} from "../../registry/binding-validation-core";
+import type { NormalizedSurfaceBinding } from "../../registry";
 
 function executionErrorToGraphQLError(error: ExecutionError): GraphQLError {
 	let message: string;
@@ -52,6 +59,38 @@ function executionErrorToGraphQLError(error: ExecutionError): GraphQLError {
 	return new GraphQLError(message, { extensions });
 }
 
+function sanitizeGraphQLFieldIdentifier(value: string): string {
+	const sanitized = value.replace(/[^_0-9A-Za-z]/g, "_");
+	return /^[A-Za-z_]/.test(sanitized) ? sanitized : `_${sanitized}`;
+}
+
+function getGraphQLFieldName<C extends DefaultContext = DefaultContext>(
+	binding: NormalizedSurfaceBinding<"graphql", C>,
+): string {
+	if (binding.config.field) {
+		return binding.config.field;
+	}
+
+	const base = sanitizeGraphQLFieldIdentifier(binding.operationName);
+	if (binding.bindingName === "default") {
+		return base;
+	}
+
+	return `${base}_${sanitizeGraphQLFieldIdentifier(binding.bindingName)}`;
+}
+
+export const graphqlBindingValidationSpecs = [
+	createDuplicateTargetBindingValidationSpec({
+		surface: "graphql",
+		targetKind: "field",
+		filter: (binding) => binding.op.outputChunkSchema == null,
+		select: (binding) =>
+			`${binding.config.type ?? "mutation"}:${getGraphQLFieldName(binding)}`,
+	}),
+] as const;
+
+registerBindingValidationSpecs(graphqlBindingValidationSpecs);
+
 /**
  * Build a GraphQL schema from operations exposed on the graphql surface.
  * Each operation becomes a query or mutation field; input/output types are
@@ -67,7 +106,15 @@ export async function buildGraphQLSchema<
 	registry: OperationRegistry<C> | OperationRegistryWithHooks<C>,
 	ctx: C,
 ): Promise<GraphQLSchema> {
-	const graphqlBindings = normalizeSurfaceBindings(registry, "graphql");
+	const graphqlBindings = normalizeSurfaceBindings(registry, "graphql").filter(
+		(binding) => binding.op.outputChunkSchema == null,
+	);
+	assertNoBindingValidationIssues(
+		validateBindingSpecs(
+			graphqlBindings,
+			[...graphqlBindingValidationSpecs],
+		),
+	);
 	const hooks = "hooks" in registry ? getHooks(registry) : undefined;
 	const typesByOperation = new Map<
 		string,
@@ -82,8 +129,7 @@ export async function buildGraphQLSchema<
 
 	for (const binding of graphqlBindings) {
 		const { op, config } = binding;
-		if (op.outputChunkSchema != null) continue;
-		const fieldName = config.field ?? getSurfaceBindingLookupKey(binding);
+		const fieldName = getGraphQLFieldName(binding);
 		const kind = config.type ?? "mutation";
 
 		let types = typesByOperation.get(op.name);
@@ -133,7 +179,10 @@ export async function buildGraphQLSchema<
 				ctx,
 				"graphql",
 				config,
-				hooks ? { hooks } : undefined,
+				{
+					...(hooks ? { hooks } : {}),
+					binding,
+				},
 			);
 			if (!result.ok) {
 				throw executionErrorToGraphQLError(result.error);

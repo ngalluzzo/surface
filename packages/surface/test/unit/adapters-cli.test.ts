@@ -1,7 +1,13 @@
 import { describe, expect, test } from "bun:test";
-import { runCli } from "../../src/index.js";
+import {
+	defineOperation,
+	type DefaultContext,
+	type OperationRegistry,
+	runCli,
+} from "../../src/index.js";
 import { createMockContext } from "../fixtures/context.js";
 import { createRegistryWithMinimalOp } from "../fixtures/operations.js";
+import { z } from "zod";
 
 const ctx = createMockContext();
 
@@ -105,5 +111,50 @@ describe("runCli", () => {
 		expect(exitCalls).toContain(0);
 		expect(handlerRan).toBe(false);
 		expect(out.some((s) => s.includes("Dry run"))).toBe(true);
+	});
+
+	test("throws on duplicate cli commands", async () => {
+		const opA = defineOperation({
+			name: "test.cliA",
+			schema: z.object({ id: z.string() }),
+			outputSchema: z.object({ id: z.string() }),
+			handler: async (payload: { id: string }) => ({
+				ok: true as const,
+				value: payload,
+			}),
+			expose: {
+				cli: {
+					default: {
+						command: "duplicate command",
+						description: "duplicate command A",
+					},
+				},
+			},
+		});
+		const opB = defineOperation({
+			name: "test.cliB",
+			schema: z.object({ id: z.string() }),
+			outputSchema: z.object({ id: z.string() }),
+			handler: async (payload: { id: string }) => ({
+				ok: true as const,
+				value: payload,
+			}),
+			expose: {
+				cli: {
+					default: {
+						command: "duplicate command",
+						description: "duplicate command B",
+					},
+				},
+			},
+		});
+		const registry = new Map([
+			[opA.name, opA],
+			[opB.name, opB],
+		]) as OperationRegistry<DefaultContext>;
+
+		await expect(runCli(registry, ctx, ["duplicate command"])).rejects.toThrow(
+			'Duplicate cli command "duplicate command"',
+		);
 	});
 });

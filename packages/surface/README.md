@@ -408,7 +408,7 @@ expose: {
 }
 ```
 
-For GraphQL, non-default bindings should currently set an explicit `field`. GraphQL field names must be valid GraphQL identifiers, while generic binding lookup keys may include characters like `:`.
+If `field` is omitted, `surface` derives one from the operation and binding names using a GraphQL-safe identifier. If you set `field` explicitly, it must already be a valid GraphQL field name.
 
 ### MCP — `buildMcpServer`
 
@@ -509,31 +509,47 @@ type AppRegistry = {
 
 Use this type with all clients below. The server builds runtime maps (method+path, topic, etc.) from the same registry; the client stays in sync via types.
 
-When a surface has multiple bindings for the same operation, generated runtime maps use:
+When a surface has multiple bindings for the same operation, generated binding keys use:
 - the operation name for the `default` binding
 - `operationName:bindingName` for additional bindings
+
+Use `bindingRef(operation, binding?)` when you want a structured reference instead of a serialized key.
 
 ### HTTP client — `@gooios/surface/client`
 
 Framework-agnostic fetch-based client. Returns `Promise<Result<TOutput, ExecutionError>>` — the same shape the server sends in the response body.
 
 ```ts
-import { buildHttpMapFromRegistry } from "@gooios/surface";
+import { bindingRef, buildHttpBindingsFromRegistry } from "@gooios/surface";
 import { createClient } from "@gooios/surface/client";
-import type { HttpMap } from "@gooios/surface/client";
 import type { AppRegistry } from "./registry";
 
-// Build httpMap from the server registry (or maintain manually)
-const httpMap = buildHttpMapFromRegistry(registry) as HttpMap<AppRegistry>;
+// Build binding definitions from the server registry (or maintain manually)
+const bindings = buildHttpBindingsFromRegistry(registry);
 
 const client = createClient<AppRegistry>({
   baseUrl: "https://api.example.com",
   headers: () => ({ Authorization: `Bearer ${getToken()}` }),
-  httpMap,
+  bindings,
 });
 
-// Fully typed — input and return type inferred from AppRegistry
+// Fully typed indexed access
 const result = await client["registrations.register"]({
+  personId: "p1",
+  eventId: "e1",
+  eventCapacity: 50,
+  confirmedCount: 10,
+});
+
+// Or call through an explicit binding definition / binding ref
+await client.invoke(client.bindings["registrations.register"], {
+  personId: "p1",
+  eventId: "e1",
+  eventCapacity: 50,
+  confirmedCount: 10,
+});
+
+await client.invoke(bindingRef("registrations.register", "admin"), {
   personId: "p1",
   eventId: "e1",
   eventCapacity: 50,
@@ -549,13 +565,14 @@ if (result.ok) {
 
 Use in server-side callers, CLI scripts, tests, or any non-React context. No React or TanStack Query required.
 
-If an operation exposes multiple HTTP bindings, the additional entries in `httpMap` are keyed as `operationName:bindingName`.
+`httpMap` is still accepted for compatibility, but `bindings` is the primary API.
 
 ### Job client — `@gooios/surface/job-client`
 
 Type-safe enqueue. Payload is typed per operation; wrong shape is a compile error instead of a runtime failure in the worker.
 
 ```ts
+import { bindingRef } from "@gooios/surface";
 import { createJobClient } from "@gooios/surface/job-client";
 import type { AppRegistry } from "./registry";
 
@@ -582,6 +599,9 @@ await jobs.enqueue("registrations.register", {
 await jobs.enqueue("registrations.register", payload, {
   idempotencyKey: "register:p1:e1",
 });
+
+// Binding-aware enqueue for non-default bindings
+await jobs.enqueue(bindingRef("registrations.register", "backfill"), payload);
 ```
 
 Queue, retries, and timeout come from the operation’s job config on the worker; the client only sends name, payload, and optional key.
@@ -591,17 +611,32 @@ Queue, retries, and timeout come from the operation’s job config on the worker
 Type-safe publish. Topic and source come from the event map (built from the operation’s event config), not from the call site.
 
 ```ts
-import { createEventClient, buildEventMapFromRegistry } from "@gooios/surface";
+import { bindingRef, buildEventBindingsFromRegistry } from "@gooios/surface";
+import { createEventClient } from "@gooios/surface/event-client";
 import type { AppRegistry } from "./registry";
 
-const eventMap = buildEventMapFromRegistry(registry);
+const bindings = buildEventBindingsFromRegistry(registry);
 
 const events = createEventClient<AppRegistry>({
   transport: sqsTransport, // { publish(topic, payload, options?) }
-  eventMap,
+  bindings,
 });
 
 await events.publish("registrations.requested", {
+  personId: "p1",
+  eventId: "e1",
+  eventCapacity: 50,
+  confirmedCount: 10,
+});
+
+await events.publish(events.bindings["registrations.requested"], {
+  personId: "p1",
+  eventId: "e1",
+  eventCapacity: 50,
+  confirmedCount: 10,
+});
+
+await events.publish(bindingRef("registrations.requested", "stripe"), {
   personId: "p1",
   eventId: "e1",
   eventCapacity: 50,
@@ -611,7 +646,7 @@ await events.publish("registrations.requested", {
 
 Fire-and-forget; no return value.
 
-If an operation exposes multiple event bindings, the additional entries in `eventMap` are keyed as `operationName:bindingName`.
+`eventMap` is still accepted for compatibility, but `bindings` is the primary API.
 
 ### React Query — `@gooios/surface/client/react`
 
@@ -620,11 +655,13 @@ Thin wrapper over the HTTP client. Use `useOperationQuery` for read-like operati
 Requires `react` and `@tanstack/react-query` as peer dependencies.
 
 ```ts
+import { buildHttpBindingsFromRegistry } from "@gooios/surface";
 import { createClient } from "@gooios/surface/client";
 import { useOperationQuery, useOperationMutation } from "@gooios/surface/client/react";
 import type { AppRegistry } from "./registry";
 
-const client = createClient<AppRegistry>({ baseUrl: "/api", httpMap });
+const bindings = buildHttpBindingsFromRegistry(registry);
+const client = createClient<AppRegistry>({ baseUrl: "/api", bindings });
 
 // Read-like (e.g. GET)
 function RegistrationDetails({ id }: { id: string }) {
@@ -650,6 +687,32 @@ function RegisterForm() {
 
 ---
 
+## Validation
+
+Bindings can now be preflight-validated before you build surfaces:
+
+```ts
+import { validateBindings } from "@gooios/surface";
+
+const issues = validateBindings(registry);
+if (issues.length > 0) {
+  throw new Error(issues.map((issue) => issue.message).join("\n"));
+}
+```
+
+`validateBindings()` returns structured issues for ambiguous surface targets such as:
+- duplicate HTTP routes
+- duplicate CLI commands
+- duplicate webhook `provider:event` pairs
+- duplicate GraphQL fields within the same query/mutation kind
+- duplicate MCP tool names
+
+Surface builders that detect these collisions throw `BindingValidationError`, which carries the same `issues` array.
+
+If you only want to validate one surface, use `validateSurfaceBindings(registry, "http")` or the corresponding surface name.
+
+---
+
 ## Observability
 
 Wire in tracing, logging, or metrics once — it applies to every operation on every surface:
@@ -659,9 +722,12 @@ import { composeRegistries } from "@gooios/surface";
 
 const registry = composeRegistries([...], {
   hooks: {
-    onPhaseStart: ({ operation, phase, surface }) => span.start(operation.name, phase),
-    onPhaseEnd:   ({ operation, phase, surface, durationMs }) => span.end({ durationMs }),
-    onError:      ({ operation, phase, surface, error }) => logger.error({ operation: operation.name, phase, surface, ...error }),
+    onPhaseStart: ({ operation, phase, surface, binding }) =>
+      span.start(operation.name, phase, { surface, binding: binding?.key }),
+    onPhaseEnd:   ({ operation, phase, surface, binding, durationMs }) =>
+      span.end({ operation: operation.name, phase, surface, binding: binding?.key, durationMs }),
+    onError:      ({ operation, phase, surface, binding, error }) =>
+      logger.error({ operation: operation.name, phase, surface, binding: binding?.key, ...error }),
   },
 });
 ```

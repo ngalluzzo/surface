@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { bindingRef } from "../../src/index.js";
 import { createEventClient } from "../../src/event-client/index.js";
 
 type TestRegistry = {
@@ -6,7 +7,7 @@ type TestRegistry = {
 };
 
 describe("createEventClient", () => {
-	test("publish calls transport with topic and payload from event map", async () => {
+	test("publish calls transport with topic and payload from bindings", async () => {
 		const payload = { orderId: "ord-1" };
 		let receivedTopic: string | null = null;
 		let receivedPayload: unknown = null;
@@ -22,15 +23,17 @@ describe("createEventClient", () => {
 
 		const client = createEventClient<TestRegistry>({
 			transport,
-			eventMap: {
+			bindings: {
 				"events.order.created": {
+					key: "events.order.created",
+					ref: bindingRef("events.order.created"),
 					topic: "order.created",
 					source: "api",
 				},
 			},
 		});
 
-		await client.publish("events.order.created", payload);
+		await client.publish(client.bindings["events.order.created"], payload);
 
 		expect(receivedTopic === "order.created").toBe(true);
 		expect(receivedPayload).toEqual(payload);
@@ -55,7 +58,7 @@ describe("createEventClient", () => {
 			},
 		});
 
-		await client.publish("events.order.created", { orderId: "x" });
+		await client.publish(bindingRef("events.order.created"), { orderId: "x" });
 
 		expect(receivedTopic === "orders").toBe(true);
 		expect(receivedOptions).toBeUndefined();

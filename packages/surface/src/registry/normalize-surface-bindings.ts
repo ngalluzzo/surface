@@ -1,4 +1,9 @@
 import type { ZodType } from "zod";
+import {
+	type BindingDefinition,
+	bindingRef,
+	serializeBindingRef,
+} from "../bindings";
 import type {
 	AnyOperation,
 	DefaultContext,
@@ -14,7 +19,7 @@ export interface NormalizedSurfaceBinding<
 	S extends ExposeSurface,
 	C extends DefaultContext = DefaultContext,
 	TPayload = unknown,
-> {
+> extends BindingDefinition {
 	bindingId: string;
 	bindingName: string;
 	surface: S;
@@ -37,20 +42,26 @@ export function normalizeOperationSurfaceBindings<
 >(
 	op: Operation<ZodType, TPayload, TOutput, TError, C>,
 	surface: S,
-) : NormalizedSurfaceBinding<S, C, TPayload>[] {
+): NormalizedSurfaceBinding<S, C, TPayload>[] {
 	const bindings = op.expose[surface] as
 		| SurfaceBindings<SurfaceBindingConfigMap<TPayload, C>[S]>
 		| undefined;
 	if (bindings === undefined) return [];
 
-	return Object.entries(bindings).map(([bindingName, config]) => ({
-		bindingId: `${op.name}:${bindingName}`,
-		bindingName,
-		surface,
-		operationName: op.name,
-		op,
-		config,
-	}));
+	return Object.entries(bindings).map(([bindingName, config]) => {
+		const ref = bindingRef(op.name, bindingName);
+		const key = serializeBindingRef(ref);
+		return {
+			key,
+			ref,
+			bindingId: key,
+			bindingName,
+			surface,
+			operationName: op.name,
+			op,
+			config,
+		};
+	});
 }
 
 export function normalizeSurfaceBindings<
@@ -74,9 +85,7 @@ export function getSurfaceBindingLookupKey<
 	C extends DefaultContext = DefaultContext,
 	TPayload = unknown,
 >(binding: NormalizedSurfaceBinding<S, C, TPayload>): string {
-	return binding.bindingName === "default"
-		? binding.operationName
-		: binding.bindingId;
+	return binding.key;
 }
 
 export function resolveOperationSurfaceBinding<

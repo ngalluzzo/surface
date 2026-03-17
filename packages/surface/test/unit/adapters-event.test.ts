@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+	buildEventBindingsFromRegistry,
 	buildEventMapFromRegistry,
 	type DefaultContext,
 	type OperationRegistry,
@@ -123,5 +124,19 @@ describe("buildEventMapFromRegistry", () => {
 		const registry = createRegistryWithMinimalOp();
 		const map = buildEventMapFromRegistry(registry);
 		expect(map["test.echo"]).toEqual({ topic: "test.echo", source: "test" });
+	});
+});
+
+describe("buildEventBindingsFromRegistry", () => {
+	test("returns structured binding definitions", () => {
+		const registry = createRegistryWithMinimalOp();
+		const bindings = buildEventBindingsFromRegistry(registry);
+
+		expect(bindings["test.echo"]).toEqual({
+			key: "test.echo",
+			ref: { operation: "test.echo", binding: "default" },
+			topic: "test.echo",
+			source: "test",
+		});
 	});
 });

@@ -1,4 +1,5 @@
 import type { ZodType } from "zod";
+import { bindingMeta, isBindingRef } from "../bindings";
 import type {
 	BaseSurfaceConfig,
 	DefaultContext,
@@ -46,6 +47,7 @@ export async function execute<
 		dryRun?: boolean;
 		/** When set, adapters can use it for response caching or dedup; execute() does not perform store lookups. */
 		idempotencyKey?: string;
+		binding?: Parameters<typeof bindingMeta>[0] | ReturnType<typeof bindingMeta>;
 	},
 ): Promise<Result<TOutput, ExecutionError>> {
 	const { contextToUse, controller, timeoutMs } = applyTimeout(
@@ -78,6 +80,11 @@ export async function execute<
 		context: contextToUse,
 		surface,
 		surfaceConfig,
+		...(options?.binding !== undefined && {
+			binding: isBindingRef(options.binding)
+				? bindingMeta(options.binding)
+				: options.binding,
+		}),
 		op,
 		dryRun: options?.dryRun ?? false,
 	};

@@ -37,6 +37,7 @@ export async function runPipeline<
 
 	for (const entry of stageEntries) {
 		const meta = {
+			...(state.binding !== undefined && { binding: state.binding }),
 			operation: { name: state.op.name },
 			phase: entry.phase,
 			surface: state.surface,

@@ -102,4 +102,46 @@ describe("buildGraphQLSchema", () => {
 			testEchoAdmin: { id: "two" },
 		});
 	});
+
+	test("throws on duplicate graphql fields of the same kind", async () => {
+		const opA = defineOperation({
+			name: "testGraphA",
+			schema: z.object({ id: z.string() }),
+			outputSchema: z.object({ id: z.string() }),
+			handler: async (payload: { id: string }) => ({
+				ok: true as const,
+				value: payload,
+			}),
+			expose: {
+				graphql: {
+					default: { type: "mutation", field: "sharedField" },
+				},
+			},
+		});
+		const opB = defineOperation({
+			name: "testGraphB",
+			schema: z.object({ id: z.string() }),
+			outputSchema: z.object({ id: z.string() }),
+			handler: async (payload: { id: string }) => ({
+				ok: true as const,
+				value: payload,
+			}),
+			expose: {
+				graphql: {
+					default: { type: "mutation", field: "sharedField" },
+				},
+			},
+		});
+		const registry = new Map([
+			[opA.name, opA],
+			[opB.name, opB],
+		]) as import("../../src/index.js").OperationRegistry<
+			import("../../src/index.js").DefaultContext
+		>;
+		const ctx = createMockContext();
+
+		await expect(buildGraphQLSchema(registry, ctx)).rejects.toThrow(
+			'Duplicate graphql field "mutation:sharedField"',
+		);
+	});
 });

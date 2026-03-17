@@ -75,4 +75,37 @@ describe("buildMcpServer", () => {
 			text: expect.stringContaining("Handler failed"),
 		});
 	});
+
+	test("throws on duplicate MCP tool names", async () => {
+		const { defineOperation } = await import("../../src/index.js");
+		const { z } = await import("zod");
+		const opA = defineOperation({
+			name: "test.mcpA",
+			schema: z.object({ id: z.string() }),
+			outputSchema: z.null(),
+			handler: async () => ({ ok: true as const, value: null }),
+			expose: {
+				mcp: { default: { tool: "shared_tool" } },
+			},
+		});
+		const opB = defineOperation({
+			name: "test.mcpB",
+			schema: z.object({ id: z.string() }),
+			outputSchema: z.null(),
+			handler: async () => ({ ok: true as const, value: null }),
+			expose: {
+				mcp: { default: { tool: "shared_tool" } },
+			},
+		});
+		const registry = new Map([
+			["test.mcpA", opA],
+			["test.mcpB", opB],
+		]) as OperationRegistry<DefaultContext>;
+		const { server } = createMockMcpServer();
+		const ctx = createMockContext();
+
+		expect(() => buildMcpServer(registry, server, ctx)).toThrow(
+			'Duplicate mcp tool "shared_tool"',
+		);
+	});
 });

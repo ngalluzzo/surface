@@ -1,4 +1,5 @@
 import type { ZodType } from "zod";
+import type { BindingMeta, BindingRef } from "../bindings";
 import { execute } from "../execution/execute";
 import type { Result } from "../execution/result";
 import type {
@@ -37,6 +38,7 @@ export function executeWithIdempotency(
 			signal?: AbortSignal;
 			dryRun?: boolean;
 			idempotencyKey?: string;
+			binding?: BindingRef | BindingMeta;
 		},
 	): Promise<Result<TOutput, ExecutionError>> => {
 		const key = options?.idempotencyKey;

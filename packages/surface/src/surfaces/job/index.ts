@@ -45,7 +45,10 @@ export function registerJobOperations<
 					ctx,
 					"job",
 					config,
-					hooks ? { hooks } : undefined,
+					{
+						...(hooks ? { hooks } : {}),
+						binding,
+					},
 				);
 
 				if (!result.ok) {

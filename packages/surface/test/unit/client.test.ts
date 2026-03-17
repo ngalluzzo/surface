@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { bindingRef } from "../../src/index.js";
 import { createClient } from "../../src/client/index.js";
 
 type TestRegistry = {
@@ -7,16 +8,27 @@ type TestRegistry = {
 };
 
 describe("createClient", () => {
-	test("returns one function per httpMap key", () => {
+	test("returns one function per binding key", () => {
 		const client = createClient<TestRegistry>({
 			baseUrl: "https://api.example.com",
-			httpMap: {
-				"op.get": { method: "GET", path: "/op/get" },
-				"op.create": { method: "POST", path: "/op/create" },
+			bindings: {
+				"op.get": {
+					key: "op.get",
+					ref: bindingRef("op.get"),
+					method: "GET",
+					path: "/op/get",
+				},
+				"op.create": {
+					key: "op.create",
+					ref: bindingRef("op.create"),
+					method: "POST",
+					path: "/op/create",
+				},
 			},
 		});
 		expect(typeof client["op.get"]).toBe("function");
 		expect(typeof client["op.create"]).toBe("function");
+		expect(client.bindings["op.get"].ref).toEqual(bindingRef("op.get"));
 	});
 
 	test("GET request omits body and returns parsed result", async () => {
@@ -33,9 +45,19 @@ describe("createClient", () => {
 
 		const client = createClient<TestRegistry>({
 			baseUrl: "https://api.example.com",
-			httpMap: {
-				"op.get": { method: "GET", path: "/op/get" },
-				"op.create": { method: "POST", path: "/op/create" },
+			bindings: {
+				"op.get": {
+					key: "op.get",
+					ref: bindingRef("op.get"),
+					method: "GET",
+					path: "/op/get",
+				},
+				"op.create": {
+					key: "op.create",
+					ref: bindingRef("op.create"),
+					method: "POST",
+					path: "/op/create",
+				},
 			},
 		});
 
@@ -59,9 +81,19 @@ describe("createClient", () => {
 
 		const client = createClient<TestRegistry>({
 			baseUrl: "https://api.example.com",
-			httpMap: {
-				"op.get": { method: "GET", path: "/op/get" },
-				"op.create": { method: "POST", path: "/op/create" },
+			bindings: {
+				"op.get": {
+					key: "op.get",
+					ref: bindingRef("op.get"),
+					method: "GET",
+					path: "/op/get",
+				},
+				"op.create": {
+					key: "op.create",
+					ref: bindingRef("op.create"),
+					method: "POST",
+					path: "/op/create",
+				},
 			},
 		});
 
@@ -117,13 +149,60 @@ describe("createClient", () => {
 		const client = createClient<TestRegistry>({
 			baseUrl: "https://api.example.com",
 			headers: () => ({ Authorization: "Bearer token" }),
-			httpMap: {
-				"op.get": { method: "GET", path: "/op/get" },
-				"op.create": { method: "POST", path: "/op/create" },
+			bindings: {
+				"op.get": {
+					key: "op.get",
+					ref: bindingRef("op.get"),
+					method: "GET",
+					path: "/op/get",
+				},
+				"op.create": {
+					key: "op.create",
+					ref: bindingRef("op.create"),
+					method: "POST",
+					path: "/op/create",
+				},
 			},
 		});
 
 		await client["op.get"]({ id: "1" });
 		expect(called).toBe(true);
+	});
+
+	test("invoke accepts binding definitions and binding refs", async () => {
+		const mockFetch = async (_url: string, init?: RequestInit) =>
+			new Response(JSON.stringify({ ok: true, value: { id: "3" } }), {
+				status: 200,
+			});
+		globalThis.fetch = mockFetch as typeof fetch;
+
+		const client = createClient<TestRegistry>({
+			baseUrl: "https://api.example.com",
+			bindings: {
+				"op.get": {
+					key: "op.get",
+					ref: bindingRef("op.get"),
+					method: "GET",
+					path: "/op/get",
+				},
+				"op.create": {
+					key: "op.create",
+					ref: bindingRef("op.create"),
+					method: "POST",
+					path: "/op/create",
+				},
+			},
+		});
+
+		const resultFromDefinition = await client.invoke(
+			client.bindings["op.create"],
+			{ name: "Carol" },
+		);
+		expect(resultFromDefinition.ok).toBe(true);
+
+		const resultFromRef = await client.invoke(bindingRef("op.create"), {
+			name: "Carol",
+		});
+		expect(resultFromRef.ok).toBe(true);
 	});
 });

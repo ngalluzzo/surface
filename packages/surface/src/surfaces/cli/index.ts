@@ -4,11 +4,28 @@ import { execute, getHooks } from "../../execution";
 import type { OperationRegistryWithHooks } from "../../operation";
 import { normalizeSurfaceBindings } from "../../operation";
 import type { DefaultContext, OperationRegistry } from "../../operation/types";
+import {
+	assertNoBindingValidationIssues,
+	createDuplicateTargetBindingValidationSpec,
+	registerBindingValidationSpecs,
+	validateBindingSpecs,
+} from "../../registry/binding-validation-core";
 import type { SchemaRegistryZodRegistry } from "../../registry/schema-registry";
 import { defaultRegistry } from "../../registry/schema-registry";
 import type { RunCliOptions } from "./types";
 
 export type { RunCliOptions } from "./types";
+
+export const cliBindingValidationSpecs = [
+	createDuplicateTargetBindingValidationSpec({
+		surface: "cli",
+		targetKind: "command",
+		filter: (binding) => binding.op.outputChunkSchema == null,
+		select: (binding) => binding.config.command,
+	}),
+] as const;
+
+registerBindingValidationSpecs(cliBindingValidationSpecs);
 
 export async function runCli<C extends DefaultContext = DefaultContext>(
 	registry: OperationRegistry<C> | OperationRegistryWithHooks<C>,
@@ -18,6 +35,9 @@ export async function runCli<C extends DefaultContext = DefaultContext>(
 ): Promise<void> {
 	const cliBindings = normalizeSurfaceBindings(registry, "cli").filter(
 		(binding) => binding.op.outputChunkSchema == null,
+	);
+	assertNoBindingValidationIssues(
+		validateBindingSpecs(cliBindings, [...cliBindingValidationSpecs]),
 	);
 	const hooks = "hooks" in registry ? getHooks(registry) : undefined;
 	const [command, ...rest] = argv;
@@ -48,8 +68,12 @@ export async function runCli<C extends DefaultContext = DefaultContext>(
 
 	const executeOptions =
 		hooks || dryRun
-			? { ...(hooks ? { hooks } : {}), ...(dryRun ? { dryRun: true } : {}) }
-			: undefined;
+			? {
+					...(hooks ? { hooks } : {}),
+					...(dryRun ? { dryRun: true } : {}),
+					binding,
+				}
+			: { binding };
 	const result = await execute(op, raw, ctx, "cli", config, executeOptions);
 
 	if (!result.ok) {

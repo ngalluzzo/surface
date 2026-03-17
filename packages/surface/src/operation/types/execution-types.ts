@@ -1,4 +1,5 @@
 import type { ZodType } from "zod";
+import type { BindingMeta } from "../../bindings";
 import type { DefaultContext } from "./default-context";
 import type { Operation } from "./operation-types";
 import type { BaseSurfaceConfig } from "./surface-config";
@@ -22,6 +23,7 @@ export type ExecutionError =
 	| { phase: "aborted" };
 
 export interface ExecutionMeta {
+	binding?: BindingMeta;
 	operation: { name: string };
 	phase: Phase;
 	surface: Surface;
@@ -50,6 +52,7 @@ export interface ExecutionState<
 	context: C;
 	surface: Surface;
 	surfaceConfig: BaseSurfaceConfig<TPayload, C> | undefined;
+	binding?: BindingMeta;
 	op: Operation<ZodType, TPayload, TOutput, TError, C>;
 	dryRun?: boolean;
 }

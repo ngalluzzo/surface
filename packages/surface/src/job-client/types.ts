@@ -1,3 +1,4 @@
+import type { BindingRef } from "../bindings";
 import type { RegistryContract } from "../client/types";
 
 /**
@@ -21,3 +22,16 @@ export type JobClientEnqueue<R extends RegistryContract> = <K extends keyof R>(
 	payload: R[K]["input"],
 	options?: { idempotencyKey?: string },
 ) => Promise<void>;
+
+export interface JobClientEnqueueWithBinding<R extends RegistryContract> {
+	<K extends keyof R>(
+		opName: K,
+		payload: R[K]["input"],
+		options?: { idempotencyKey?: string },
+	): Promise<void>;
+	(
+		opName: BindingRef,
+		payload: unknown,
+		options?: { idempotencyKey?: string },
+	): Promise<void>;
+}

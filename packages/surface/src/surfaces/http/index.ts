@@ -8,9 +8,25 @@ import {
 	normalizeSurfaceBindings,
 } from "../../operation";
 import type { DefaultContext, OperationRegistry } from "../../operation/types";
+import {
+	assertNoBindingValidationIssues,
+	createDuplicateTargetBindingValidationSpec,
+	registerBindingValidationSpecs,
+	validateBindingSpecs,
+} from "../../registry/binding-validation-core";
 import type { HttpHandler, HttpRequest } from "./types";
 
 export type { HttpHandler, HttpRequest, HttpResponse } from "./types";
+
+export const httpBindingValidationSpecs = [
+	createDuplicateTargetBindingValidationSpec({
+		surface: "http",
+		targetKind: "route",
+		select: (binding) => `${binding.config.method} ${binding.config.path}`,
+	}),
+] as const;
+
+registerBindingValidationSpecs(httpBindingValidationSpecs);
 
 function isAsyncIterable(value: unknown): value is AsyncIterable<unknown> {
 	return (
@@ -117,6 +133,9 @@ export function buildHttpHandlers<C extends DefaultContext = DefaultContext>(
 ): Map<string, HttpHandler<C>> {
 	const handlers = new Map<string, HttpHandler<C>>();
 	const httpBindings = normalizeSurfaceBindings(registry, "http");
+	assertNoBindingValidationIssues(
+		validateBindingSpecs(httpBindings, [...httpBindingValidationSpecs]),
+	);
 	const hooks = "hooks" in registry ? getHooks(registry) : undefined;
 	const idempotencyStore = options?.idempotencyStore;
 	const idempotencyTtlMs = options?.idempotencyTtlMs;
@@ -147,8 +166,9 @@ export function buildHttpHandlers<C extends DefaultContext = DefaultContext>(
 							...(hooks && { hooks }),
 							...(req.signal && { signal: req.signal }),
 							...(key && { idempotencyKey: key }),
+							binding,
 						}
-					: undefined;
+					: { binding };
 			const result = await exec(op, req.body, ctx, "http", config, opts);
 
 			if (!result.ok) {
@@ -188,10 +208,45 @@ export function buildHttpMapFromRegistry<
 >(
 	registry: OperationRegistry<C> | OperationRegistryWithHooks<C>,
 ): Record<string, { method: string; path: string }> {
-	const httpBindings = normalizeSurfaceBindings(registry, "http");
 	const map: Record<string, { method: string; path: string }> = {};
+	for (const [key, binding] of Object.entries(
+		buildHttpBindingsFromRegistry(registry),
+	)) {
+		map[key] = { method: binding.method, path: binding.path };
+	}
+	return map;
+}
+
+export function buildHttpBindingsFromRegistry<
+	C extends DefaultContext = DefaultContext,
+>(
+	registry: OperationRegistry<C> | OperationRegistryWithHooks<C>,
+): Record<
+	string,
+	{
+		key: string;
+		ref: { operation: string; binding: string };
+		method: string;
+		path: string;
+	}
+> {
+	const httpBindings = normalizeSurfaceBindings(registry, "http");
+	assertNoBindingValidationIssues(
+		validateBindingSpecs(httpBindings, [...httpBindingValidationSpecs]),
+	);
+	const map: Record<
+		string,
+		{
+			key: string;
+			ref: { operation: string; binding: string };
+			method: string;
+			path: string;
+		}
+	> = {};
 	for (const binding of httpBindings) {
 		map[getSurfaceBindingLookupKey(binding)] = {
+			key: binding.key,
+			ref: binding.ref,
 			method: binding.config.method,
 			path: binding.config.path,
 		};

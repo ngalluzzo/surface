@@ -140,7 +140,10 @@ export function buildWsHandlers<C extends DefaultContext = DefaultContext>(
 				ctx,
 				"ws",
 				binding.config,
-				hooks ? { hooks } : undefined,
+				{
+					...(hooks ? { hooks } : {}),
+					binding,
+				},
 			);
 
 			if (!result.ok) {

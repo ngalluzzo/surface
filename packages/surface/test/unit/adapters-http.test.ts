@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import type { AnyOperation, DefaultContext } from "../../src/index.js";
 import {
+	BindingValidationError,
+	buildHttpBindingsFromRegistry,
 	buildHttpHandlers,
 	buildHttpMapFromRegistry,
 	composeRegistries,
@@ -237,6 +239,47 @@ describe("buildHttpHandlers", () => {
 			body: { id: "admin-route" },
 		});
 	});
+
+	test("throws on duplicate http routes", () => {
+		const opA = {
+			...createMinimalOp(),
+			name: "test.echoA",
+			expose: {
+				http: {
+					default: { method: "POST" as const, path: "/test/collision" },
+				},
+			},
+		};
+		const opB = {
+			...createMinimalOp(),
+			name: "test.echoB",
+			expose: {
+				http: {
+					default: { method: "POST" as const, path: "/test/collision" },
+				},
+			},
+		};
+		const registry = new Map<string, AnyOperation<DefaultContext>>();
+		registry.set(opA.name, opA as AnyOperation<DefaultContext>);
+		registry.set(opB.name, opB as AnyOperation<DefaultContext>);
+
+		try {
+			buildHttpHandlers(registry, ctx);
+			throw new Error("Expected duplicate route validation error");
+		} catch (error) {
+			expect(error).toBeInstanceOf(BindingValidationError);
+			if (!(error instanceof BindingValidationError)) return;
+			expect(error.issues).toHaveLength(1);
+			expect(error.issues[0]).toMatchObject({
+				surface: "http",
+				targetKind: "route",
+				target: "POST /test/collision",
+			});
+		}
+		expect(() => buildHttpBindingsFromRegistry(registry)).toThrow(
+			BindingValidationError,
+		);
+	});
 });
 
 describe("buildHttpMapFromRegistry", () => {
@@ -264,6 +307,20 @@ describe("buildHttpMapFromRegistry", () => {
 		expect(map["test.echo:admin"]).toEqual({
 			method: "POST",
 			path: "/test/echo/admin",
+		});
+	});
+});
+
+describe("buildHttpBindingsFromRegistry", () => {
+	test("returns structured binding definitions", () => {
+		const registry = createRegistryWithMinimalOp();
+		const bindings = buildHttpBindingsFromRegistry(registry);
+
+		expect(bindings["test.echo"]).toEqual({
+			key: "test.echo",
+			ref: { operation: "test.echo", binding: "default" },
+			method: "POST",
+			path: "/test/echo",
 		});
 	});
 });

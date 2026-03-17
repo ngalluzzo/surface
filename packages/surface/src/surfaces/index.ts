@@ -11,7 +11,11 @@ export type {
 	EventTransportLike,
 	RegisterEventConsumersOptions,
 } from "./event";
-export { buildEventMapFromRegistry, registerEventConsumers } from "./event";
+export {
+	buildEventBindingsFromRegistry,
+	buildEventMapFromRegistry,
+	registerEventConsumers,
+} from "./event";
 export { buildGraphQLSchema } from "./graphql";
 export type {
 	BuildHttpHandlersOptions,
@@ -19,7 +23,11 @@ export type {
 	HttpRequest,
 	HttpResponse,
 } from "./http";
-export { buildHttpHandlers, buildHttpMapFromRegistry } from "./http";
+export {
+	buildHttpBindingsFromRegistry,
+	buildHttpHandlers,
+	buildHttpMapFromRegistry,
+} from "./http";
 export type {
 	JobDefinitionLike,
 	JobDefinitionOptions,

@@ -4,10 +4,28 @@ import { executeWithIdempotency } from "../../idempotency";
 import type { OperationRegistryWithHooks } from "../../operation";
 import { normalizeSurfaceBindings } from "../../operation";
 import type { DefaultContext, OperationRegistry } from "../../operation/types";
+import {
+	assertNoBindingValidationIssues,
+	createDuplicateTargetBindingValidationSpec,
+	registerBindingValidationSpecs,
+	validateBindingSpecs,
+} from "../../registry/binding-validation-core";
 import { parseRaw } from "../shared/parse-raw";
 import type { WebhookHandler } from "./types";
 
 export type { WebhookHandler, WebhookRequest, WebhookResponse } from "./types";
+
+export const webhookBindingValidationSpecs = [
+	createDuplicateTargetBindingValidationSpec({
+		surface: "webhook",
+		targetKind: "provider/event pair",
+		filter: (binding) => binding.op.outputChunkSchema == null,
+		select: (binding) =>
+			`${binding.config.provider}:${binding.config.event}`,
+	}),
+] as const;
+
+registerBindingValidationSpecs(webhookBindingValidationSpecs);
 
 export interface BuildWebhookHandlersOptions<
 	_C extends DefaultContext = DefaultContext,
@@ -22,7 +40,12 @@ export function buildWebhookHandlers<C extends DefaultContext = DefaultContext>(
 	options?: BuildWebhookHandlersOptions<C>,
 ): Map<string, WebhookHandler<C>> {
 	const handlers = new Map<string, WebhookHandler<C>>();
-	const webhookBindings = normalizeSurfaceBindings(registry, "webhook");
+	const webhookBindings = normalizeSurfaceBindings(registry, "webhook").filter(
+		(binding) => binding.op.outputChunkSchema == null,
+	);
+	assertNoBindingValidationIssues(
+		validateBindingSpecs(webhookBindings, [...webhookBindingValidationSpecs]),
+	);
 	const hooks = "hooks" in registry ? getHooks(registry) : undefined;
 	const idempotencyStore = options?.idempotencyStore;
 	const idempotencyTtlMs = options?.idempotencyTtlMs;
@@ -37,7 +60,6 @@ export function buildWebhookHandlers<C extends DefaultContext = DefaultContext>(
 
 	const byProvider = new Map<string, typeof webhookBindings>();
 	for (const binding of webhookBindings) {
-		if (binding.op.outputChunkSchema != null) continue;
 		const provider = binding.config.provider;
 		if (!byProvider.has(provider)) byProvider.set(provider, []);
 		byProvider.get(provider)?.push(binding);
@@ -71,8 +93,12 @@ export function buildWebhookHandlers<C extends DefaultContext = DefaultContext>(
 				})();
 			const opts =
 				hooks || key
-					? { ...(hooks && { hooks }), ...(key && { idempotencyKey: key }) }
-					: undefined;
+					? {
+							...(hooks && { hooks }),
+							...(key && { idempotencyKey: key }),
+							binding,
+						}
+					: { binding };
 			const result = await exec(
 				op,
 				parsed,

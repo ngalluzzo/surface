@@ -65,8 +65,12 @@ export function registerEventConsumers<
 					})();
 				const opts =
 					hooks || key
-						? { ...(hooks && { hooks }), ...(key && { idempotencyKey: key }) }
-						: undefined;
+						? {
+								...(hooks && { hooks }),
+								...(key && { idempotencyKey: key }),
+								binding,
+							}
+						: { binding };
 				const result = await exec(op, parsed, ctx, "event", config, opts);
 
 				if (!result.ok) {
@@ -104,10 +108,45 @@ export function buildEventMapFromRegistry<
 >(
 	registry: OperationRegistry<C> | OperationRegistryWithHooks<C>,
 ): Record<string, { topic: string; source?: string }> {
-	const eventBindings = normalizeSurfaceBindings(registry, "event");
 	const map: Record<string, { topic: string; source?: string }> = {};
+	for (const [key, binding] of Object.entries(
+		buildEventBindingsFromRegistry(registry),
+	)) {
+		map[key] = {
+			topic: binding.topic,
+			...(binding.source && { source: binding.source }),
+		};
+	}
+	return map;
+}
+
+export function buildEventBindingsFromRegistry<
+	C extends DefaultContext = DefaultContext,
+>(
+	registry: OperationRegistry<C> | OperationRegistryWithHooks<C>,
+): Record<
+	string,
+	{
+		key: string;
+		ref: { operation: string; binding: string };
+		topic: string;
+		source?: string;
+	}
+> {
+	const eventBindings = normalizeSurfaceBindings(registry, "event");
+	const map: Record<
+		string,
+		{
+			key: string;
+			ref: { operation: string; binding: string };
+			topic: string;
+			source?: string;
+		}
+	> = {};
 	for (const binding of eventBindings) {
 		map[getSurfaceBindingLookupKey(binding)] = {
+			key: binding.key,
+			ref: binding.ref,
 			topic: binding.config.topic,
 			...(binding.config.source && { source: binding.config.source }),
 		};

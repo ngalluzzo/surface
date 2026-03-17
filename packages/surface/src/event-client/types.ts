@@ -1,3 +1,4 @@
+import type { BindingDefinition, BindingRef } from "../bindings";
 import type { RegistryContract } from "../client/types";
 
 /**
@@ -6,6 +7,16 @@ import type { RegistryContract } from "../client/types";
  */
 export type EventMap<R extends RegistryContract> = {
 	[K in keyof R]: { topic: string; source?: string };
+};
+
+export interface EventBindingDefinition<TKey extends string = string>
+	extends BindingDefinition<TKey> {
+	topic: string;
+	source?: string;
+}
+
+export type EventBindings<R extends RegistryContract> = {
+	[K in keyof R]: EventBindingDefinition<K & string>;
 };
 
 /**
@@ -25,6 +36,14 @@ export interface EventPublishLike {
 export type EventClientPublish<R extends RegistryContract> = <
 	K extends keyof R,
 >(
-	opName: K,
+	opName: K | EventBindingDefinition<K & string>,
 	payload: R[K]["input"],
 ) => Promise<void>;
+
+export interface EventClientPublishWithBinding<R extends RegistryContract> {
+	<K extends keyof R>(
+		binding: K | EventBindingDefinition<K & string>,
+		payload: R[K]["input"],
+	): Promise<void>;
+	(binding: BindingRef, payload: unknown): Promise<void>;
+}

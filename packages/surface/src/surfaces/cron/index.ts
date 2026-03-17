@@ -43,7 +43,10 @@ export function registerCronOperations<
 					ctx,
 					"cron",
 					config,
-					hooks ? { hooks } : undefined,
+					{
+						...(hooks ? { hooks } : {}),
+						binding,
+					},
 				);
 
 				if (!result.ok) {
