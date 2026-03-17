@@ -1,16 +1,43 @@
 // Result
 
+export type { BindingDefinition, BindingMeta, BindingRef } from "./bindings";
 // Bindings
 export {
-	DEFAULT_BINDING_NAME,
 	bindingMeta,
 	bindingRef,
+	DEFAULT_BINDING_NAME,
+	eventBindingRef,
+	graphqlBindingRef,
+	httpBindingRef,
 	isBindingRef,
+	jobBindingRef,
 	parseBindingKey,
 	serializeBindingRef,
 } from "./bindings";
-export type { BindingDefinition, BindingMeta, BindingRef } from "./bindings";
-
+export type {
+	ClientMap,
+	CreateClientOptions,
+	HttpBindingDefinition,
+	HttpBindingsFromContract,
+	HttpBindingsFromRegistry,
+	HttpBindingsRecord,
+	HttpClient,
+	HttpMap,
+	RegistryContract,
+} from "./client";
+// Clients
+export { createClient, createClientFromHttpMap } from "./client";
+export type {
+	CreateEventClientOptions,
+	CreateEventClientOptionsFromContract,
+	EventBindingDefinition,
+	EventBindingsFromContract,
+	EventBindingsFromRegistry,
+	EventBindingsRecord,
+	EventMap,
+	EventPublishLike,
+} from "./event-client";
+export { createEventClient, createEventClientFromMap } from "./event-client";
 // Execution
 export { execute, getHooks, testOperation } from "./execution";
 export type { Result } from "./execution/result";
@@ -22,11 +49,25 @@ export {
 	executeWithIdempotency,
 } from "./idempotency";
 export type {
+	CreateJobClientOptions,
+	CreateJobClientOptionsFromContract,
+	EnqueueLike,
+	JobBindingDefinition,
+	JobBindingsFromContract,
+	JobBindingsFromRegistry,
+	JobBindingsRecord,
+} from "./job-client";
+export { createJobClient, createJobClientFromBindings } from "./job-client";
+export type {
 	BindingValidationIssue,
 	BindingValidationIssueCode,
 	CreateOpsOptions,
+	ExecuteOperationRequest,
+	ExecuteUnknownOperationRequest,
 	NormalizedSurfaceBinding,
 	OperationRegistryWithHooks,
+	OperationSurfaceBindingUnion,
+	RegistrySurfaceBindingUnion,
 	SchemaMetadata,
 	SchemaRegistryInstance,
 	SchemaRegistryZodRegistry,
@@ -35,8 +76,8 @@ export type {
 export {
 	assertNoBindingValidationIssues,
 	BindingValidationError,
-	composeRegistries,
 	collectDuplicateTargetIssues,
+	composeRegistries,
 	createOps,
 	createSchemaRegistry,
 	defaultRegistry,
@@ -44,28 +85,36 @@ export {
 	defineOperation,
 	defineRegistry,
 	exportSchemas,
-	forSurface,
 	formatBindingValidationIssue,
 	formatBindingValidationIssues,
+	forSurface,
 	getSurfaceBindingLookupKey,
 	normalizeOperationSurfaceBindings,
-	resolveOperationSurfaceBinding,
 	normalizeSurfaceBindings,
 	registerOperationSchema,
+	resolveOperationSurfaceBinding,
 	validateBindings,
 	validateSurfaceBindings,
 } from "./operation";
 // Types
 export type {
 	AnyOperation,
+	AnyRegistry,
+	AnyTypedOperation,
+	BindingKeyOfOperation,
+	BindingNamesOf,
 	CliSurfaceConfig,
+	ContextOf,
 	CronSurfaceConfig,
 	DefaultContext,
 	DomainGuard,
+	ErrorOf,
 	EventSurfaceConfig,
 	ExecutionError,
 	ExecutionMeta,
 	ExecutionState,
+	ExposedSurfacesOf,
+	ExposeOf,
 	ExposeSurface,
 	GraphQLSurfaceConfig,
 	GuardError,
@@ -74,17 +123,31 @@ export type {
 	GuardPolicy,
 	GuardSuccess,
 	HttpSurfaceConfig,
+	IsStreamingOperation,
 	JobSurfaceConfig,
 	LifecycleHooks,
 	McpSurfaceConfig,
+	NonStreamingOperationsOf,
+	NonStreamingSurfaceBindingKeysOf,
 	Operation,
+	OperationByName,
 	OperationMeta,
+	OperationNameOf,
 	OperationRegistry,
+	OperationsOf,
+	OutputChunkSchemaOf,
+	OutputOf,
 	Phase,
+	RegistryContractOf,
+	RegistryDefinition,
+	RootRegistryDefinition,
 	Surface,
 	SurfaceBindingConfigMap,
+	SurfaceBindingKeysOf,
 	SurfaceBindings,
+	SurfaceBindingsOf,
 	SurfaceConfigMap,
+	SurfaceConfigOf,
 	SurfaceContext,
 	SurfaceGuard,
 	WebhookSurfaceConfig,
@@ -126,6 +189,7 @@ export {
 	buildHttpBindingsFromRegistry,
 	buildHttpHandlers,
 	buildHttpMapFromRegistry,
+	buildJobBindingsFromRegistry,
 	buildMcpServer,
 	buildWebhookHandlers,
 	buildWsHandlers,

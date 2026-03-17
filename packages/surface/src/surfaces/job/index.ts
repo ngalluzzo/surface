@@ -1,4 +1,5 @@
 import { execute, getHooks } from "../../execution";
+import type { JobBindingsFromRegistry } from "../../job-client";
 import type { OperationRegistryWithHooks } from "../../operation";
 import {
 	getSurfaceBindingLookupKey,
@@ -14,6 +15,30 @@ export type {
 	JobRunnerLike,
 } from "./types";
 export { NonRetryableError } from "./types";
+
+export function buildJobBindingsFromRegistry<
+	TRegistry extends OperationRegistry | OperationRegistryWithHooks,
+>(registry: TRegistry): JobBindingsFromRegistry<TRegistry> {
+	const jobBindings = normalizeSurfaceBindings(registry, "job").filter(
+		(binding) => binding.op.outputChunkSchema == null,
+	);
+	const map: Record<
+		string,
+		{
+			key: string;
+			ref: unknown;
+			queue: string;
+		}
+	> = {};
+	for (const binding of jobBindings) {
+		map[getSurfaceBindingLookupKey(binding)] = {
+			key: binding.key,
+			ref: binding.ref,
+			queue: binding.config.queue,
+		};
+	}
+	return map as JobBindingsFromRegistry<TRegistry>;
+}
 
 export function registerJobOperations<
 	C extends DefaultContext = DefaultContext,
@@ -39,19 +64,12 @@ export function registerJobOperations<
 				) => string,
 			}),
 			handler: async (payload, _runnerCtx) => {
-				const result = await execute(
-					op,
-					payload,
-					ctx,
-					"job",
-					config,
-					{
-						...(hooks ? { hooks } : {}),
-						binding,
-					},
-				);
+				const result = await execute(op, payload, ctx, "job", config, {
+					...(hooks ? { hooks } : {}),
+					binding,
+				});
 
-				if (!result.ok) {
+				if (result.ok === false) {
 					const { error } = result;
 					switch (error.phase) {
 						case "surface-guard":

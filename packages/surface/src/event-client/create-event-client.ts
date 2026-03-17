@@ -1,83 +1,114 @@
 import type { BindingRef } from "../bindings";
-import { isBindingRef, parseBindingKey, serializeBindingRef } from "../bindings";
+import {
+	isBindingRef,
+	parseBindingKey,
+	serializeBindingRef,
+} from "../bindings";
 import type { RegistryContract } from "../client/types";
 import type {
 	EventBindingDefinition,
-	EventBindings,
-	EventClientPublishWithBinding,
+	EventBindingsFromContract,
+	EventBindingsRecord,
+	EventClientPublish,
+	EventClientPublishUnknown,
 	EventMap,
 	EventPublishLike,
 } from "./types";
 
-export interface CreateEventClientOptions<R extends RegistryContract> {
-	/** Transport that can publish to a topic (e.g. SQS, Kafka client). */
+export interface CreateEventClientOptions<
+	TBindings extends EventBindingsRecord,
+> {
 	transport: EventPublishLike;
-	/** Preferred binding definitions keyed by serialized binding key. */
-	bindings?: EventBindings<R>;
-	/** Backward-compatible topic/source map keyed by serialized binding key. */
-	eventMap?: EventMap<R>;
+	bindings: TBindings;
 }
 
-function toBindings<R extends RegistryContract>(
-	options: CreateEventClientOptions<R>,
-): EventBindings<R> {
-	if (options.bindings) {
-		return options.bindings;
+export interface CreateEventClientOptionsFromContract<
+	R extends RegistryContract,
+> {
+	transport: EventPublishLike;
+	eventMap: EventMap<R>;
+}
+
+function resolveEventBindingKey(binding: string | { key: string }): string {
+	return typeof binding === "string" ? binding : binding.key;
+}
+
+function resolveEventClientBindingKey(
+	binding: string | { key: string } | BindingRef,
+): string {
+	if (isBindingRef(binding)) {
+		if (binding.surface !== "event") {
+			throw new Error(
+				`Event client received ${binding.surface} binding ref; expected event`,
+			);
+		}
+		return serializeBindingRef(binding);
 	}
-	if (!options.eventMap) {
-		throw new Error(
-			'createEventClient requires either "bindings" or "eventMap"',
+
+	return resolveEventBindingKey(binding as string | { key: string });
+}
+
+export function createEventClient<const TBindings extends EventBindingsRecord>(
+	options: CreateEventClientOptions<TBindings>,
+): {
+	bindings: TBindings;
+	publish: EventClientPublish<TBindings>;
+	publishUnknown: EventClientPublishUnknown;
+} {
+	const { transport, bindings } = options;
+
+	const publishByKey = async (key: string, payload: unknown): Promise<void> => {
+		const config = bindings[key as keyof TBindings];
+		if (!config) {
+			throw new Error(`Unknown event binding: ${key}`);
+		}
+		const { topic, source } = config;
+		await transport.publish(
+			topic,
+			payload,
+			source !== undefined ? { source } : undefined,
 		);
-	}
-	const map = options.eventMap as EventMap<R>;
-	return Object.fromEntries(
-		Object.entries(map).map(([key, binding]) => [
+	};
+
+	return {
+		bindings,
+		publish: (async (binding: unknown, payload: unknown) => {
+			const key = resolveEventClientBindingKey(
+				binding as string | EventBindingDefinition | BindingRef,
+			);
+			await publishByKey(key, payload);
+		}) as EventClientPublish<TBindings>,
+		publishUnknown: async (
+			binding: string | EventBindingDefinition | BindingRef,
+			payload: unknown,
+		) => {
+			const key = resolveEventClientBindingKey(binding);
+			await publishByKey(key, payload);
+		},
+	};
+}
+
+export function createEventClientFromMap<R extends RegistryContract>(
+	options: CreateEventClientOptionsFromContract<R>,
+): {
+	bindings: EventBindingsFromContract<R>;
+	publish: EventClientPublish<EventBindingsFromContract<R>>;
+	publishUnknown: EventClientPublishUnknown;
+} {
+	const bindings = Object.fromEntries(
+		Object.entries(options.eventMap).map(([key, binding]) => [
 			key,
 			{
 				key,
-				ref: parseBindingKey(key),
+				ref: parseBindingKey("event", key),
 				topic: binding.topic,
 				...(binding.source && { source: binding.source }),
 			},
 		]),
-	) as EventBindings<R>;
-}
+	) as EventBindingsFromContract<R>;
 
-function resolveEventBindingKey(binding: string | EventBindingDefinition): string {
-	return typeof binding === "string" ? binding : binding.key;
-}
-
-/**
- * Creates a type-safe event publish client. Payload is typed per operation;
- * topic and source come from the event map (from the operation's event config).
- */
-export function createEventClient<R extends RegistryContract>(
-	options: CreateEventClientOptions<R>,
-): {
-	bindings: EventBindings<R>;
-	publish: EventClientPublishWithBinding<R>;
-} {
-	const { transport } = options;
-	const bindings = toBindings(options);
-
-	return {
+	return createEventClient({
+		transport: options.transport,
 		bindings,
-		publish: async (binding: string | EventBindingDefinition | BindingRef, payload: unknown) => {
-			const key = isBindingRef(binding)
-				? serializeBindingRef(binding)
-				: resolveEventBindingKey(
-						binding as string | EventBindingDefinition,
-					);
-			const config = bindings[key as keyof typeof bindings];
-			if (!config) {
-				throw new Error(`Unknown event binding: ${key}`);
-			}
-			const { topic, source } = config;
-			await transport.publish(
-				topic,
-				payload,
-				source !== undefined ? { source } : undefined,
-			);
-		},
-	};
+	});
 }

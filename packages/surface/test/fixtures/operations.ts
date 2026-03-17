@@ -2,7 +2,6 @@ import { z } from "zod";
 import type {
 	AnyOperation,
 	DefaultContext,
-	Operation,
 	SurfaceGuard,
 } from "../../src/index.js";
 import {
@@ -19,18 +18,15 @@ type EchoPayload = z.infer<typeof echoSchema>;
  * Minimal operation for execute/adapter tests: no guards, success handler.
  * Not registered via defineOperation so it does not pollute atlasRegistry.
  */
-export function createMinimalOp(): Operation<
-	typeof echoSchema,
-	EchoPayload,
-	EchoPayload,
-	string,
-	DefaultContext
-> {
+export function createMinimalOp() {
 	return {
 		name: "test.echo",
 		schema: echoSchema,
 		outputSchema: echoSchema,
-		handler: async (payload: EchoPayload) => ({ ok: true, value: payload }),
+		handler: async (payload: EchoPayload) => ({
+			ok: true as const,
+			value: payload,
+		}),
 		expose: {
 			http: { default: { method: "POST", path: "/test/echo" } },
 			cli: { default: { command: "test echo", description: "Echo test" } },
@@ -52,29 +48,26 @@ export function createMinimalOp(): Operation<
 			ws: { default: {} },
 			graphql: { default: { type: "mutation", field: "echo" } },
 		},
-	};
+	} satisfies AnyOperation<DefaultContext>;
 }
 
 /**
  * Operation with domain guard that fails. Used to test phase 3 (domain-guard) error.
  */
-export function createOpWithFailingDomainGuard(): Operation<
-	typeof echoSchema,
-	EchoPayload,
-	EchoPayload,
-	string,
-	DefaultContext
-> {
+export function createOpWithFailingDomainGuard() {
 	return {
 		name: "test.echoGuarded",
 		schema: echoSchema,
 		outputSchema: echoSchema,
 		guards: [assertAlwaysFail],
-		handler: async (payload: EchoPayload) => ({ ok: true, value: payload }),
+		handler: async (payload: EchoPayload) => ({
+			ok: true as const,
+			value: payload,
+		}),
 		expose: {
 			http: { default: { method: "POST", path: "/test/echoGuarded" } },
 		},
-	};
+	} satisfies AnyOperation<DefaultContext>;
 }
 
 /**
@@ -82,18 +75,15 @@ export function createOpWithFailingDomainGuard(): Operation<
  */
 export function createOpWithSurfaceGuard(
 	surfaceGuard: SurfaceGuard<DefaultContext>,
-): Operation<
-	typeof echoSchema,
-	EchoPayload,
-	EchoPayload,
-	string,
-	DefaultContext
-> {
+) {
 	return {
 		name: "test.echoSurfaceGuarded",
 		schema: echoSchema,
 		outputSchema: echoSchema,
-		handler: async (payload: EchoPayload) => ({ ok: true, value: payload }),
+		handler: async (payload: EchoPayload) => ({
+			ok: true as const,
+			value: payload,
+		}),
 		expose: {
 			http: {
 				default: {
@@ -103,7 +93,7 @@ export function createOpWithSurfaceGuard(
 				},
 			},
 		},
-	};
+	} satisfies AnyOperation<DefaultContext>;
 }
 
 /**
@@ -230,26 +220,18 @@ export const opWithContextEnrichment = defineOperation({
  * a registry without going through defineOperation for the op (so we pass a raw op
  * in a Map).
  */
-export function createRegistryWithMinimalOp(): Map<
-	string,
-	AnyOperation<DefaultContext>
-> {
+export function createRegistryWithMinimalOp() {
 	const op = createMinimalOp();
-	const map = new Map<string, AnyOperation<DefaultContext>>();
-	map.set(op.name, op as AnyOperation<DefaultContext>);
-	return map;
+	return defineRegistry("test", [op]);
 }
 
 /**
  * Registry with ops that were defined via defineOperation (for forSurface / adapter tests).
  */
-export function createDefinedRegistry(): Map<
-	string,
-	AnyOperation<DefaultContext>
-> {
-	return defineRegistry<DefaultContext>("test", [
-		opWithTwoGuards as AnyOperation<DefaultContext>,
-		opWithFailingHandler as AnyOperation<DefaultContext>,
-		opWithOutputValidationFailure as AnyOperation<DefaultContext>,
+export function createDefinedRegistry() {
+	return defineRegistry("test", [
+		opWithTwoGuards,
+		opWithFailingHandler,
+		opWithOutputValidationFailure,
 	]);
 }

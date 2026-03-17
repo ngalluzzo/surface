@@ -31,7 +31,7 @@ export function makeHandlerStage<
 		}
 
 		const result = await op.handler(payload, context);
-		if (!result.ok) {
+		if (result.ok === false) {
 			return {
 				ok: false,
 				error: { phase: "handler", error: result.error } as ExecutionError,

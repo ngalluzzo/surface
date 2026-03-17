@@ -50,7 +50,7 @@ export async function runPipeline<
 			hooks?.onPhaseEnd?.({ ...meta, durationMs: performance.now() - tStart }),
 		);
 
-		if (!result.ok) {
+		if (result.ok === false) {
 			await runHook(() => hooks?.onError?.({ ...meta, error: result.error }));
 			return result;
 		}

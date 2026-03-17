@@ -23,7 +23,7 @@ export function makeSurfaceGuardStage<
 
 		for (const guard of guards) {
 			const result = await guard(raw, surfaceCtx);
-			if (!result.ok) {
+			if (result.ok === false) {
 				return {
 					ok: false,
 					error: { phase: "surface-guard", ...result.error } as ExecutionError,

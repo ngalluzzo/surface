@@ -1,7 +1,9 @@
 import { describe, expect, test } from "bun:test";
+import { z } from "zod";
 import {
-	type DefaultContext,
-	type OperationRegistry,
+	buildJobBindingsFromRegistry,
+	defineOperation,
+	defineRegistry,
 	registerJobOperations,
 } from "../../src/index.js";
 import { createMockContext } from "../fixtures/context.js";
@@ -52,9 +54,7 @@ describe("registerJobOperations", () => {
 			handler: async () => ({ ok: true, value: null }),
 			expose: { job: { default: { queue: "q", retries: 2 } } },
 		});
-		const registry = new Map([
-			["test.guardedJob", op],
-		]) as OperationRegistry<DefaultContext>;
+		const registry = defineRegistry("test", [op]);
 		const { runner, registered } = createMockJobRunner();
 		const ctx = createMockContext();
 		registerJobOperations(registry, runner, ctx);
@@ -82,9 +82,7 @@ describe("registerJobOperations", () => {
 				},
 			},
 		});
-		const registry = new Map([
-			["test.idemJob", op],
-		]) as OperationRegistry<DefaultContext>;
+		const registry = defineRegistry("test", [op]);
 		const { runner, registered } = createMockJobRunner();
 		const ctx = createMockContext();
 		registerJobOperations(registry, runner, ctx);
@@ -96,5 +94,26 @@ describe("registerJobOperations", () => {
 			registered[0]?.idempotencyKey as (p: unknown, ctx?: unknown) => string
 		)({ personId: "p1", eventId: "e1" }, ctx);
 		expect(key).toBe("reg:p1:e1");
+	});
+
+	test("standard job binding builder skips stream jobs", () => {
+		const op = defineOperation({
+			name: "test.streamJobBinding",
+			schema: z.object({ id: z.string() }),
+			outputSchema: z.never(),
+			outputChunkSchema: z.object({ value: z.string() }),
+			handler: async () => ({
+				ok: true as const,
+				value: {
+					async *[Symbol.asyncIterator]() {
+						yield { value: "chunk" };
+					},
+				},
+			}),
+			expose: { job: { default: { queue: "q", retries: 1 } } },
+		});
+		const registry = defineRegistry("test", [op]);
+
+		expect(buildJobBindingsFromRegistry(registry)).toEqual({});
 	});
 });

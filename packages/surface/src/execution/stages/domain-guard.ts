@@ -31,7 +31,7 @@ export function makeDomainGuardStage<
 		for (const entry of entries) {
 			for (const guard of entry.guards) {
 				const result = await guard(payload, ctx);
-				if (!result.ok) {
+				if (result.ok === false) {
 					return {
 						ok: false,
 						error: {

@@ -1,10 +1,18 @@
-export type { CreateEventClientOptions } from "./create-event-client";
-export { createEventClient } from "./create-event-client";
+export type {
+	CreateEventClientOptions,
+	CreateEventClientOptionsFromContract,
+} from "./create-event-client";
+export {
+	createEventClient,
+	createEventClientFromMap,
+} from "./create-event-client";
 export type {
 	EventBindingDefinition,
-	EventBindings,
+	EventBindingsFromContract,
+	EventBindingsFromRegistry,
+	EventBindingsRecord,
 	EventClientPublish,
-	EventClientPublishWithBinding,
+	EventClientPublishUnknown,
 	EventMap,
 	EventPublishLike,
 } from "./types";

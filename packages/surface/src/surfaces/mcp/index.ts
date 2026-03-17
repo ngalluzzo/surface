@@ -76,19 +76,12 @@ export function buildMcpServer<C extends DefaultContext = DefaultContext>(
 			...(op.description !== undefined && { description: op.description }),
 			inputSchema,
 			handler: async (args: unknown) => {
-				const result = await execute(
-					op,
-					args,
-					ctx,
-					"mcp",
-					config,
-					{
-						...(hooks ? { hooks } : {}),
-						binding,
-					},
-				);
+				const result = await execute(op, args, ctx, "mcp", config, {
+					...(hooks ? { hooks } : {}),
+					binding,
+				});
 
-				if (!result.ok) {
+				if (result.ok === false) {
 					return { text: formatExecutionError(result.error) };
 				}
 				return { text: JSON.stringify(result.value) };

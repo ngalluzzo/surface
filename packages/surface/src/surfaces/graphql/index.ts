@@ -12,15 +12,14 @@ import {
 import { bindingMeta } from "../../bindings";
 import { execute, getHooks } from "../../execution";
 import type { OperationRegistryWithHooks } from "../../operation";
-import {
-	getSurfaceBindingLookupKey,
-	normalizeSurfaceBindings,
-} from "../../operation";
+import { normalizeSurfaceBindings } from "../../operation";
 import type {
+	AnyOperation,
 	DefaultContext,
 	ExecutionError,
 	OperationRegistry,
 } from "../../operation/types";
+import type { NormalizedSurfaceBinding } from "../../registry";
 import {
 	assertNoBindingValidationIssues,
 	type BindingValidationSpec,
@@ -28,7 +27,6 @@ import {
 	registerBindingValidationSpecs,
 	validateBindingSpecs,
 } from "../../registry/binding-validation-core";
-import type { NormalizedSurfaceBinding } from "../../registry";
 
 const GRAPHQL_FIELD_IDENTIFIER_PATTERN = /^[_A-Za-z][_0-9A-Za-z]*$/;
 
@@ -72,8 +70,8 @@ function isValidGraphQLFieldIdentifier(value: string): boolean {
 	return GRAPHQL_FIELD_IDENTIFIER_PATTERN.test(value);
 }
 
-function getGraphQLFieldName<C extends DefaultContext = DefaultContext>(
-	binding: NormalizedSurfaceBinding<"graphql", C>,
+function getGraphQLFieldName(
+	binding: NormalizedSurfaceBinding<"graphql">,
 ): string {
 	if (binding.config.field) {
 		return binding.config.field;
@@ -98,7 +96,7 @@ export const graphqlBindingValidationSpecs: readonly BindingValidationSpec[] = [
 
 				const graphqlBinding = binding as NormalizedSurfaceBinding<
 					"graphql",
-					any
+					AnyOperation
 				>;
 				const explicitField = graphqlBinding.config.field;
 				if (
@@ -114,9 +112,7 @@ export const graphqlBindingValidationSpecs: readonly BindingValidationSpec[] = [
 						surface: "graphql",
 						targetKind: "field",
 						target: explicitField,
-						bindings: [
-							bindingMeta(graphqlBinding.ref, graphqlBinding.key),
-						],
+						bindings: [bindingMeta(graphqlBinding.ref, graphqlBinding.key)],
 						message: `Invalid graphql field "${explicitField}" for binding "${graphqlBinding.key}"`,
 					},
 				];
@@ -152,10 +148,7 @@ export async function buildGraphQLSchema<
 		(binding) => binding.op.outputChunkSchema == null,
 	);
 	assertNoBindingValidationIssues(
-		validateBindingSpecs(
-			graphqlBindings,
-			[...graphqlBindingValidationSpecs],
-		),
+		validateBindingSpecs(graphqlBindings, [...graphqlBindingValidationSpecs]),
 	);
 	const hooks = "hooks" in registry ? getHooks(registry) : undefined;
 	const typesByOperation = new Map<
@@ -215,18 +208,11 @@ export async function buildGraphQLSchema<
 
 		const resolve = async (_source: unknown, argsInput: unknown) => {
 			const payload = (argsInput as { input?: unknown }).input;
-			const result = await execute(
-				op,
-				payload,
-				ctx,
-				"graphql",
-				config,
-				{
-					...(hooks ? { hooks } : {}),
-					binding,
-				},
-			);
-			if (!result.ok) {
+			const result = await execute(op, payload, ctx, "graphql", config, {
+				...(hooks ? { hooks } : {}),
+				binding,
+			});
+			if (result.ok === false) {
 				throw executionErrorToGraphQLError(result.error);
 			}
 			return result.value;

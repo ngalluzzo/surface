@@ -1,9 +1,7 @@
-import type { ZodType } from "zod";
 import type { BindingMeta } from "../../bindings";
 import type { DefaultContext } from "./default-context";
-import type { Operation } from "./operation-types";
-import type { BaseSurfaceConfig } from "./surface-config";
-import type { Surface } from "./surface-config";
+import type { AnyOperation } from "./operation-types";
+import type { BaseSurfaceConfig, Surface } from "./surface-config";
 
 export type Phase =
 	| "surface-guard"
@@ -43,7 +41,7 @@ export interface LifecycleHooks {
 export interface ExecutionState<
 	TPayload,
 	TOutput,
-	TError extends string,
+	_TError extends string,
 	C extends DefaultContext,
 > {
 	raw: unknown;
@@ -53,7 +51,7 @@ export interface ExecutionState<
 	surface: Surface;
 	surfaceConfig: BaseSurfaceConfig<TPayload, C> | undefined;
 	binding?: BindingMeta;
-	op: Operation<ZodType, TPayload, TOutput, TError, C>;
+	op: AnyOperation<C>;
 	dryRun?: boolean;
 }
 

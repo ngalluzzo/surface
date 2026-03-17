@@ -1,12 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import type {
+	AnyOperation,
 	DefaultContext,
 	ExecutionError,
 	ExecutionMeta,
-	Operation,
 } from "../../src/index.js";
 import { execute, resolveOperationSurfaceBinding } from "../../src/index.js";
-import type { ZodType } from "zod";
 import { createMockContext } from "../fixtures/context.js";
 import { surfaceGuardFail } from "../fixtures/guards.js";
 import {
@@ -22,29 +21,17 @@ import {
 } from "../fixtures/operations.js";
 
 const ctx = createMockContext();
-const executeOnHttp = <
-	TPayload,
-	TOutput,
-	TError extends string,
-	C extends DefaultContext = DefaultContext,
->(
-	op: Operation<ZodType, TPayload, TOutput, TError, C>,
+const executeOnHttp = <C extends DefaultContext = DefaultContext>(
+	op: AnyOperation<C>,
 	raw: unknown,
 	options?: Parameters<typeof execute>[5],
 ) =>
 	(() => {
 		const binding = resolveOperationSurfaceBinding(op, "http");
-		return execute(
-			op,
-			raw,
-			ctx as C,
-			"http",
-			binding?.config,
-			{
-				...(options ?? {}),
-				...(binding ? { binding } : {}),
-			},
-		);
+		return execute(op, raw, ctx as C, "http", binding?.config, {
+			...(options ?? {}),
+			...(binding ? { binding } : {}),
+		});
 	})();
 
 describe("execute", () => {
@@ -258,9 +245,13 @@ describe("execute", () => {
 					}
 				},
 			};
-			const result = await executeOnHttp(opWithFailingHandler, { id: "z" }, {
-				hooks,
-			});
+			const result = await executeOnHttp(
+				opWithFailingHandler,
+				{ id: "z" },
+				{
+					hooks,
+				},
+			);
 			expect(result.ok).toBe(false);
 			expect(capturedError === "handler_error").toBe(true);
 		});
@@ -339,9 +330,13 @@ describe("execute", () => {
 		test("when options.signal is already aborted, returns aborted error", async () => {
 			const controller = new AbortController();
 			controller.abort();
-			const result = await executeOnHttp(createMinimalOp(), { id: "x" }, {
-				signal: controller.signal,
-			});
+			const result = await executeOnHttp(
+				createMinimalOp(),
+				{ id: "x" },
+				{
+					signal: controller.signal,
+				},
+			);
 			expect(result.ok).toBe(false);
 			if (result.ok) return;
 			expect(result.error.phase).toBe("aborted");
@@ -356,9 +351,13 @@ describe("execute", () => {
 					return { ok: true as const, value: payload };
 				},
 			};
-			const resultPromise = executeOnHttp(op, { id: "x" }, {
-				signal: controller.signal,
-			});
+			const resultPromise = executeOnHttp(
+				op,
+				{ id: "x" },
+				{
+					signal: controller.signal,
+				},
+			);
 			setTimeout(() => controller.abort(), 10);
 			const result = await resultPromise;
 			expect(result.ok).toBe(false);

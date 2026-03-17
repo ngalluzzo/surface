@@ -1,5 +1,9 @@
-import { bindingMeta, type BindingDefinition, type BindingMeta } from "../bindings";
-import type { ExposeSurface } from "../operation/types";
+import {
+	type BindingDefinition,
+	type BindingMeta,
+	bindingMeta,
+} from "../bindings";
+import type { AnyOperation, ExposeSurface } from "../operation/types";
 import type { NormalizedSurfaceBinding } from "./normalize-surface-bindings";
 
 export type BindingValidationIssueCode = "duplicate_target" | "invalid_target";
@@ -84,7 +88,7 @@ export function collectDuplicateTargetIssues<
 export interface BindingValidationSpec {
 	surface: ExposeSurface;
 	validate: (
-		bindings: Array<NormalizedSurfaceBinding<ExposeSurface, any>>,
+		bindings: Array<NormalizedSurfaceBinding<ExposeSurface, AnyOperation>>,
 	) => BindingValidationIssue[];
 }
 
@@ -120,20 +124,20 @@ export function createDuplicateTargetBindingValidationSpec<
 >(options: {
 	surface: S;
 	targetKind: string;
-	select: (binding: NormalizedSurfaceBinding<S, any>) => string;
-	filter?: (binding: NormalizedSurfaceBinding<S, any>) => boolean;
+	select: (binding: NormalizedSurfaceBinding<S, AnyOperation>) => string;
+	filter?: (binding: NormalizedSurfaceBinding<S, AnyOperation>) => boolean;
 }): BindingValidationSpec {
 	return {
 		surface: options.surface,
 		validate: (
-			bindings: Array<NormalizedSurfaceBinding<ExposeSurface, any>>,
+			bindings: Array<NormalizedSurfaceBinding<ExposeSurface, AnyOperation>>,
 		) =>
 			collectDuplicateTargetIssues(
 				options.filter
-					? (bindings as Array<NormalizedSurfaceBinding<S, any>>).filter(
-							options.filter,
-						)
-					: (bindings as Array<NormalizedSurfaceBinding<S, any>>),
+					? (
+							bindings as Array<NormalizedSurfaceBinding<S, AnyOperation>>
+						).filter(options.filter)
+					: (bindings as Array<NormalizedSurfaceBinding<S, AnyOperation>>),
 				{
 					surface: options.surface,
 					targetKind: options.targetKind,
@@ -144,7 +148,7 @@ export function createDuplicateTargetBindingValidationSpec<
 }
 
 export function validateBindingSpecs(
-	bindings: Array<NormalizedSurfaceBinding<ExposeSurface, any>>,
+	bindings: Array<NormalizedSurfaceBinding<ExposeSurface, AnyOperation>>,
 	specs: ReadonlyArray<BindingValidationSpec>,
 ): BindingValidationIssue[] {
 	return specs.flatMap((spec) => spec.validate(bindings));

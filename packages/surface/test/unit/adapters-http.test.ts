@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { AnyOperation, DefaultContext } from "../../src/index.js";
+import { z } from "zod";
 import {
 	BindingValidationError,
 	buildHttpBindingsFromRegistry,
@@ -7,6 +7,8 @@ import {
 	buildHttpMapFromRegistry,
 	composeRegistries,
 	createInMemoryIdempotencyStore,
+	defineOperation,
+	defineRegistry,
 } from "../../src/index.js";
 import { createMockContext } from "../fixtures/context.js";
 import {
@@ -102,8 +104,7 @@ describe("buildHttpHandlers", () => {
 				return { ok: true as const, value: payload };
 			},
 		};
-		const registry = new Map<string, AnyOperation<DefaultContext>>();
-		registry.set(slowOp.name, slowOp as AnyOperation<DefaultContext>);
+		const registry = defineRegistry("test", [slowOp]);
 		const handlers = buildHttpHandlers(registry, ctx);
 		const handler = handlers.get("POST /test/slow");
 		if (!handler) throw new Error("Expected handler for POST /test/slow");
@@ -156,8 +157,7 @@ describe("buildHttpHandlers", () => {
 				return { ok: true as const, value: payload };
 			},
 		};
-		const registry = new Map<string, AnyOperation<DefaultContext>>();
-		registry.set(op.name, op as AnyOperation<DefaultContext>);
+		const registry = defineRegistry("test", [op]);
 		const store = createInMemoryIdempotencyStore();
 		const handlers = buildHttpHandlers(registry, ctx, {
 			idempotencyStore: store,
@@ -198,8 +198,7 @@ describe("buildHttpHandlers", () => {
 				},
 			},
 		};
-		const registry = new Map<string, AnyOperation<DefaultContext>>();
-		registry.set(op.name, op as AnyOperation<DefaultContext>);
+		const registry = defineRegistry("test", [op]);
 
 		const handlers = buildHttpHandlers(registry, ctx);
 		expect(handlers.has("POST /test/echo")).toBe(true);
@@ -259,9 +258,7 @@ describe("buildHttpHandlers", () => {
 				},
 			},
 		};
-		const registry = new Map<string, AnyOperation<DefaultContext>>();
-		registry.set(opA.name, opA as AnyOperation<DefaultContext>);
-		registry.set(opB.name, opB as AnyOperation<DefaultContext>);
+		const registry = defineRegistry("test", [opA, opB]);
 
 		try {
 			buildHttpHandlers(registry, ctx);
@@ -285,7 +282,10 @@ describe("buildHttpHandlers", () => {
 describe("buildHttpMapFromRegistry", () => {
 	test("returns method and path for each http-exposed operation", () => {
 		const registry = createRegistryWithMinimalOp();
-		const map = buildHttpMapFromRegistry(registry);
+		const map = buildHttpMapFromRegistry(registry) as Record<
+			string,
+			{ method: string; path: string }
+		>;
 		expect(map["test.echo"]).toEqual({ method: "POST", path: "/test/echo" });
 	});
 
@@ -299,10 +299,12 @@ describe("buildHttpMapFromRegistry", () => {
 				},
 			},
 		};
-		const registry = new Map<string, AnyOperation<DefaultContext>>();
-		registry.set(op.name, op as AnyOperation<DefaultContext>);
+		const registry = defineRegistry("test", [op]);
 
-		const map = buildHttpMapFromRegistry(registry);
+		const map = buildHttpMapFromRegistry(registry) as Record<
+			string,
+			{ method: string; path: string }
+		>;
 		expect(map["test.echo"]).toEqual({ method: "POST", path: "/test/echo" });
 		expect(map["test.echo:admin"]).toEqual({
 			method: "POST",
@@ -314,13 +316,46 @@ describe("buildHttpMapFromRegistry", () => {
 describe("buildHttpBindingsFromRegistry", () => {
 	test("returns structured binding definitions", () => {
 		const registry = createRegistryWithMinimalOp();
-		const bindings = buildHttpBindingsFromRegistry(registry);
+		const bindings = buildHttpBindingsFromRegistry(registry) as Record<
+			string,
+			unknown
+		>;
 
 		expect(bindings["test.echo"]).toEqual({
 			key: "test.echo",
-			ref: { operation: "test.echo", binding: "default" },
+			ref: { surface: "http", operation: "test.echo", binding: "default" },
 			method: "POST",
 			path: "/test/echo",
 		});
+	});
+
+	test("skips stream operations from the standard HTTP binding builder", () => {
+		const op = defineOperation({
+			name: "test.streamHttp",
+			schema: z.object({ id: z.string() }),
+			outputSchema: z.never(),
+			outputChunkSchema: z.object({ value: z.string() }),
+			handler: async () => ({
+				ok: true as const,
+				value: {
+					async *[Symbol.asyncIterator]() {
+						yield { value: "chunk" };
+					},
+				},
+			}),
+			expose: {
+				http: {
+					default: { method: "GET" as const, path: "/test/stream-http" },
+				},
+			},
+		});
+		const registry = defineRegistry("test", [op]);
+		const bindings = buildHttpBindingsFromRegistry(registry) as Record<
+			string,
+			unknown
+		>;
+
+		expect(bindings).toEqual({});
+		expect(buildHttpMapFromRegistry(registry)).toEqual({});
 	});
 });

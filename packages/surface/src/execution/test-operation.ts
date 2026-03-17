@@ -1,10 +1,11 @@
-import type { ZodType } from "zod";
 import type {
+	AnyOperation,
 	DefaultContext,
 	ExecutionError,
 	ExecutionState,
+	InputOf,
 	LifecycleHooks,
-	Operation,
+	OutputOf,
 } from "../operation/types";
 import type { Result } from "./result";
 import { runPipeline } from "./run-pipeline";
@@ -26,32 +27,50 @@ import {
  * @see {@link execute} for the full four-phase pipeline
  */
 export async function testOperation<
-	TPayload,
-	TOutput,
-	TError extends string,
+	TOperation extends AnyOperation<C>,
 	C extends DefaultContext = DefaultContext,
 >(
-	op: Operation<ZodType, TPayload, TOutput, TError, C>,
+	op: TOperation,
 	raw: unknown,
 	ctx: C,
 	options?: { hooks?: LifecycleHooks; dryRun?: boolean },
-): Promise<Result<TOutput, ExecutionError>> {
+): Promise<Result<OutputOf<TOperation>, ExecutionError>> {
 	const stageEntries = [
 		{
 			phase: "validation" as const,
-			stage: makeValidationStage<TPayload, TOutput, TError, C>(),
+			stage: makeValidationStage<
+				InputOf<TOperation>,
+				OutputOf<TOperation>,
+				string,
+				C
+			>(),
 		},
 		{
 			phase: "domain-guard" as const,
-			stage: makeDomainGuardStage<TPayload, TOutput, TError, C>(),
+			stage: makeDomainGuardStage<
+				InputOf<TOperation>,
+				OutputOf<TOperation>,
+				string,
+				C
+			>(),
 		},
 		{
 			phase: "handler" as const,
-			stage: makeHandlerStage<TPayload, TOutput, TError, C>(),
+			stage: makeHandlerStage<
+				InputOf<TOperation>,
+				OutputOf<TOperation>,
+				string,
+				C
+			>(),
 		},
 	];
 
-	const initialState: ExecutionState<TPayload, TOutput, TError, C> = {
+	const initialState: ExecutionState<
+		InputOf<TOperation>,
+		OutputOf<TOperation>,
+		string,
+		C
+	> = {
 		raw,
 		context: ctx,
 		surface: "test",

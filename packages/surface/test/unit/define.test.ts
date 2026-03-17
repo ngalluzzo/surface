@@ -1,15 +1,18 @@
 import { describe, expect, test } from "bun:test";
 import { z } from "zod";
-import type { AnyOperation, DefaultContext, OperationRegistry } from "../../src/index.js";
+import type { AnyOperation } from "../../src/index.js";
 import {
 	BindingValidationError,
 	composeRegistries,
+	createOps,
 	defineGuardPolicy,
+	defineOperation,
 	defineRegistry,
+	eventBindingRef,
 	forSurface,
 	normalizeOperationSurfaceBindings,
-	resolveOperationSurfaceBinding,
 	normalizeSurfaceBindings,
+	resolveOperationSurfaceBinding,
 	validateBindings,
 	validateSurfaceBindings,
 } from "../../src/index.js";
@@ -26,21 +29,65 @@ describe("defineGuardPolicy", () => {
 	});
 });
 
+describe("createOps", () => {
+	test("executeUnknown rejects binding refs for the wrong surface", async () => {
+		const ops = createOps();
+		const op = makeOp("test.surfaceMismatch", { http: true, event: true });
+
+		await expect(
+			ops.executeUnknown(
+				op,
+				{ id: "x" },
+				{},
+				{
+					surface: "http",
+					binding: eventBindingRef("test.surfaceMismatch"),
+				},
+			),
+		).rejects.toThrow(
+			'Binding ref surface "event" does not match requested surface "http"',
+		);
+	});
+});
+
 function makeOp(
 	name: string,
-	surfaces: { http?: boolean; cli?: boolean; job?: boolean },
-): AnyOperation {
-	const expose: AnyOperation["expose"] = {};
+	surfaces: { http?: boolean; cli?: boolean; job?: boolean; event?: boolean },
+) {
+	const expose: {
+		http?: { default: { method: "POST"; path: string } };
+		cli?: { default: { command: string; description: string } };
+		job?: { default: { queue: string } };
+		event?: {
+			default: {
+				source: string;
+				topic: string;
+				parsePayload: (raw: unknown) => unknown;
+			};
+		};
+	} = {};
 	if (surfaces.http)
 		expose.http = { default: { method: "POST", path: `/${name}` } };
 	if (surfaces.cli)
 		expose.cli = { default: { command: name, description: name } };
 	if (surfaces.job) expose.job = { default: { queue: "default" } };
+	if (surfaces.event) {
+		expose.event = {
+			default: {
+				source: "test",
+				topic: `${name}.topic`,
+				parsePayload: (raw: unknown) => raw,
+			},
+		};
+	}
 	return {
 		name,
 		schema,
 		outputSchema: schema,
-		handler: async (p) => ({ ok: true, value: p }),
+		handler: async (p: z.infer<typeof schema>) => ({
+			ok: true as const,
+			value: p,
+		}),
 		expose,
 	};
 }
@@ -51,8 +98,13 @@ describe("defineRegistry", () => {
 		const op2 = makeOp("domain.b", { http: true });
 		const reg = defineRegistry("domain", [op1, op2]);
 		expect(reg.size).toBe(2);
-		expect(reg.get("domain.a")).toBe(op1);
-		expect(reg.get("domain.b")).toBe(op2);
+		const storedA = (reg.get as (name: string) => unknown)("domain.a");
+		const storedB = (reg.get as (name: string) => unknown)("domain.b");
+		if (!storedA || !storedB) {
+			throw new Error("Expected stored operations");
+		}
+		expect(storedA as unknown).toBe(op1);
+		expect(storedB as unknown).toBe(op2);
 	});
 
 	test("throws on duplicate operation name in same registry", () => {
@@ -60,6 +112,47 @@ describe("defineRegistry", () => {
 		expect(() => defineRegistry("domain", [op, op])).toThrow(
 			/Duplicate operation name "domain.dup" in registry "domain"/,
 		);
+	});
+
+	test('rejects operation names containing ":"', () => {
+		expect(() =>
+			defineOperation({
+				name: "domain:invalid",
+				schema,
+				outputSchema: schema,
+				handler: async (p: z.infer<typeof schema>) => ({
+					ok: true as const,
+					value: p,
+				}),
+				expose: {
+					http: {
+						default: { method: "POST" as const, path: "/invalid" },
+					},
+				},
+			}),
+		).toThrow(/cannot contain ":" because it is reserved for binding keys/);
+	});
+
+	test('rejects binding names containing ":"', () => {
+		expect(() =>
+			defineOperation({
+				name: "domain.invalidBinding",
+				schema,
+				outputSchema: schema,
+				handler: async (p: z.infer<typeof schema>) => ({
+					ok: true as const,
+					value: p,
+				}),
+				expose: {
+					http: {
+						"admin:v2": {
+							method: "POST" as const,
+							path: "/invalid-binding",
+						},
+					},
+				},
+			}),
+		).toThrow(/Binding name "admin:v2" cannot contain ":"/);
 	});
 });
 
@@ -69,8 +162,8 @@ describe("composeRegistries", () => {
 		const regB = defineRegistry("b", [makeOp("b.two", { http: true })]);
 		const root = composeRegistries([regA, regB]);
 		expect(root.size).toBe(2);
-		expect(root.get("a.one")).toBeDefined();
-		expect(root.get("b.two")).toBeDefined();
+		expect((root.get as (name: string) => unknown)("a.one")).toBeDefined();
+		expect((root.get as (name: string) => unknown)("b.two")).toBeDefined();
 	});
 
 	test("throws on duplicate name across registries", () => {
@@ -121,14 +214,13 @@ describe("normalizeSurfaceBindings", () => {
 			"default",
 			"default",
 		]);
-		expect(bindings.map((binding) => binding.bindingId)).toEqual([
+		expect(bindings.map((binding) => binding.bindingId) as string[]).toEqual([
 			"test.httpOnly",
 			"test.both",
 		]);
-		expect(bindings.map((binding) => binding.operationName)).toEqual([
-			"test.httpOnly",
-			"test.both",
-		]);
+		expect(
+			bindings.map((binding) => binding.operationName) as string[],
+		).toEqual(["test.httpOnly", "test.both"]);
 		expect(bindings.map((binding) => binding.config.path)).toEqual([
 			"/test.httpOnly",
 			"/test.both",
@@ -156,7 +248,7 @@ describe("normalizeSurfaceBindings", () => {
 			"default",
 			"admin",
 		]);
-		expect(bindings.map((binding) => binding.bindingId)).toEqual([
+		expect(bindings.map((binding) => binding.bindingId) as string[]).toEqual([
 			"test.multi",
 			"test.multi:admin",
 		]);
@@ -187,12 +279,9 @@ describe("validateBindings", () => {
 				},
 			},
 		} satisfies AnyOperation;
-		const registry = new Map([
-			[opA.name, opA],
-			[opB.name, opB],
-		]) as OperationRegistry<DefaultContext>;
+		const typedRegistry = defineRegistry("test", [opA, opB]);
 
-		const issues = validateBindings(registry);
+		const issues = validateBindings(typedRegistry);
 		expect(issues).toHaveLength(1);
 		expect(issues[0]).toMatchObject({
 			code: "duplicate_target",
@@ -200,8 +289,22 @@ describe("validateBindings", () => {
 			targetKind: "route",
 			target: "POST /duplicate",
 			bindings: [
-				{ key: "test.duplicateA", ref: { operation: "test.duplicateA", binding: "default" } },
-				{ key: "test.duplicateB", ref: { operation: "test.duplicateB", binding: "default" } },
+				{
+					key: "test.duplicateA",
+					ref: {
+						surface: "http",
+						operation: "test.duplicateA",
+						binding: "default",
+					},
+				},
+				{
+					key: "test.duplicateB",
+					ref: {
+						surface: "http",
+						operation: "test.duplicateB",
+						binding: "default",
+					},
+				},
 			],
 		});
 	});
@@ -215,10 +318,7 @@ describe("validateBindings", () => {
 				description: "duplicate cli command",
 			},
 		};
-		const registry = new Map([
-			[opA.name, opA],
-			[opB.name, opB],
-		]) as OperationRegistry<DefaultContext>;
+		const registry = defineRegistry("test", [opA, opB]);
 
 		const issues = validateSurfaceBindings(registry, "cli");
 		expect(issues).toHaveLength(1);
@@ -228,16 +328,18 @@ describe("validateBindings", () => {
 
 	test("returns structured issues for invalid explicit graphql fields", () => {
 		const op = {
-			...makeOp("test.invalidGraphqlField", { http: false, cli: false, job: false }),
+			...makeOp("test.invalidGraphqlField", {
+				http: false,
+				cli: false,
+				job: false,
+			}),
 			expose: {
 				graphql: {
 					default: { type: "mutation" as const, field: "bad-field" },
 				},
 			},
 		} satisfies AnyOperation;
-		const registry = new Map([
-			[op.name, op],
-		]) as OperationRegistry<DefaultContext>;
+		const registry = defineRegistry("test", [op]);
 
 		const issues = validateBindings(registry);
 		expect(issues).toHaveLength(1);
@@ -252,6 +354,7 @@ describe("validateBindings", () => {
 					ref: {
 						operation: "test.invalidGraphqlField",
 						binding: "default",
+						surface: "graphql",
 					},
 				},
 			],
@@ -268,11 +371,19 @@ describe("validateBindings", () => {
 				bindings: [
 					{
 						key: "test.a",
-						ref: { operation: "test.a", binding: "default" },
+						ref: {
+							surface: "http",
+							operation: "test.a",
+							binding: "default",
+						},
 					},
 					{
 						key: "test.b",
-						ref: { operation: "test.b", binding: "default" },
+						ref: {
+							surface: "http",
+							operation: "test.b",
+							binding: "default",
+						},
 					},
 				],
 				message:

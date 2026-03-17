@@ -1,3 +1,4 @@
+import type { EventBindingsFromRegistry } from "../../event-client";
 import { execute, getHooks } from "../../execution";
 import type { IdempotencyStore } from "../../idempotency";
 import { executeWithIdempotency } from "../../idempotency";
@@ -73,7 +74,7 @@ export function registerEventConsumers<
 						: { binding };
 				const result = await exec(op, parsed, ctx, "event", config, opts);
 
-				if (!result.ok) {
+				if (result.ok === false) {
 					const { error } = result;
 					switch (error.phase) {
 						case "surface-guard":
@@ -104,14 +105,21 @@ export function registerEventConsumers<
  * Default bindings use the operation name; additional bindings use binding-aware keys.
  */
 export function buildEventMapFromRegistry<
-	C extends DefaultContext = DefaultContext,
+	TRegistry extends OperationRegistry | OperationRegistryWithHooks,
 >(
-	registry: OperationRegistry<C> | OperationRegistryWithHooks<C>,
-): Record<string, { topic: string; source?: string }> {
+	registry: TRegistry,
+): {
+	[K in keyof EventBindingsFromRegistry<TRegistry>]: {
+		topic: string;
+		source?: string;
+	};
+} {
 	const map: Record<string, { topic: string; source?: string }> = {};
-	for (const [key, binding] of Object.entries(
-		buildEventBindingsFromRegistry(registry),
-	)) {
+	const bindings = buildEventBindingsFromRegistry(registry);
+	for (const key of Object.keys(bindings) as Array<
+		keyof EventBindingsFromRegistry<TRegistry> & string
+	>) {
+		const binding = bindings[key];
 		map[key] = {
 			topic: binding.topic,
 			...(binding.source && { source: binding.source }),
@@ -121,24 +129,16 @@ export function buildEventMapFromRegistry<
 }
 
 export function buildEventBindingsFromRegistry<
-	C extends DefaultContext = DefaultContext,
->(
-	registry: OperationRegistry<C> | OperationRegistryWithHooks<C>,
-): Record<
-	string,
-	{
-		key: string;
-		ref: { operation: string; binding: string };
-		topic: string;
-		source?: string;
-	}
-> {
-	const eventBindings = normalizeSurfaceBindings(registry, "event");
+	TRegistry extends OperationRegistry | OperationRegistryWithHooks,
+>(registry: TRegistry): EventBindingsFromRegistry<TRegistry> {
+	const eventBindings = normalizeSurfaceBindings(registry, "event").filter(
+		(binding) => binding.op.outputChunkSchema == null,
+	);
 	const map: Record<
 		string,
 		{
 			key: string;
-			ref: { operation: string; binding: string };
+			ref: unknown;
 			topic: string;
 			source?: string;
 		}
@@ -151,5 +151,5 @@ export function buildEventBindingsFromRegistry<
 			...(binding.config.source && { source: binding.config.source }),
 		};
 	}
-	return map;
+	return map as EventBindingsFromRegistry<TRegistry>;
 }

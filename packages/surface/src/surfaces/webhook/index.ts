@@ -20,8 +20,7 @@ export const webhookBindingValidationSpecs = [
 		surface: "webhook",
 		targetKind: "provider/event pair",
 		filter: (binding) => binding.op.outputChunkSchema == null,
-		select: (binding) =>
-			`${binding.config.provider}:${binding.config.event}`,
+		select: (binding) => `${binding.config.provider}:${binding.config.event}`,
 	}),
 ] as const;
 
@@ -99,16 +98,9 @@ export function buildWebhookHandlers<C extends DefaultContext = DefaultContext>(
 							binding,
 						}
 					: { binding };
-			const result = await exec(
-				op,
-				parsed,
-				ctx,
-				"webhook",
-				config,
-				opts,
-			);
+			const result = await exec(op, parsed, ctx, "webhook", config, opts);
 
-			if (!result.ok) {
+			if (result.ok === false) {
 				console.error(`[webhook] operation ${op.name} failed:`, result.error);
 				return { status: 200, body: { received: true, operation: op.name } };
 			}

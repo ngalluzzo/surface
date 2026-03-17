@@ -37,19 +37,12 @@ export function registerCronOperations<
 			}),
 			handler: async () => {
 				const payload = await config.buildPayload(ctx);
-				const result = await execute(
-					op,
-					payload,
-					ctx,
-					"cron",
-					config,
-					{
-						...(hooks ? { hooks } : {}),
-						binding,
-					},
-				);
+				const result = await execute(op, payload, ctx, "cron", config, {
+					...(hooks ? { hooks } : {}),
+					binding,
+				});
 
-				if (!result.ok) {
+				if (result.ok === false) {
 					const { error } = result;
 					switch (error.phase) {
 						case "surface-guard":

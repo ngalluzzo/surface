@@ -34,6 +34,7 @@ export type {
 	JobRunnerLike,
 } from "./job";
 export {
+	buildJobBindingsFromRegistry,
 	NonRetryableError,
 	registerJobOperations,
 } from "./job";

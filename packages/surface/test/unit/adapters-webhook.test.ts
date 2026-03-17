@@ -1,12 +1,11 @@
 import { describe, expect, test } from "bun:test";
+import { z } from "zod";
 import {
 	buildWebhookHandlers,
 	defineOperation,
-	type DefaultContext,
-	type OperationRegistry,
+	defineRegistry,
 } from "../../src/index.js";
 import { createMockContext } from "../fixtures/context.js";
-import { z } from "zod";
 
 describe("buildWebhookHandlers", () => {
 	test("throws on duplicate webhook provider/event pairs", () => {
@@ -46,14 +45,9 @@ describe("buildWebhookHandlers", () => {
 				},
 			},
 		});
-		const registry = new Map([
-			[opA.name, opA],
-			[opB.name, opB],
-		]) as OperationRegistry<DefaultContext>;
+		const registry = defineRegistry("test", [opA, opB]);
 
-		expect(() =>
-			buildWebhookHandlers(registry, createMockContext()),
-		).toThrow(
+		expect(() => buildWebhookHandlers(registry, createMockContext())).toThrow(
 			'Duplicate webhook provider/event pair "pagerduty:incident.triggered"',
 		);
 	});

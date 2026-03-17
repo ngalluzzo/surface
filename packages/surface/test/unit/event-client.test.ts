@@ -1,10 +1,18 @@
 import { describe, expect, test } from "bun:test";
-import { bindingRef } from "../../src/index.js";
-import { createEventClient } from "../../src/event-client/index.js";
+import {
+	createEventClient,
+	createEventClientFromMap,
+} from "../../src/event-client/index.js";
+import { eventBindingRef, httpBindingRef } from "../../src/index.js";
 
-type TestRegistry = {
-	"events.order.created": { input: { orderId: string }; output: unknown };
-};
+const bindings = {
+	"events.order.created": {
+		key: "events.order.created",
+		ref: eventBindingRef("events.order.created"),
+		topic: "order.created",
+		source: "api",
+	},
+} as const;
 
 describe("createEventClient", () => {
 	test("publish calls transport with topic and payload from bindings", async () => {
@@ -21,16 +29,9 @@ describe("createEventClient", () => {
 			},
 		};
 
-		const client = createEventClient<TestRegistry>({
+		const client = createEventClient({
 			transport,
-			bindings: {
-				"events.order.created": {
-					key: "events.order.created",
-					ref: bindingRef("events.order.created"),
-					topic: "order.created",
-					source: "api",
-				},
-			},
+			bindings,
 		});
 
 		await client.publish(client.bindings["events.order.created"], payload);
@@ -51,16 +52,35 @@ describe("createEventClient", () => {
 			},
 		};
 
-		const client = createEventClient<TestRegistry>({
+		const client = createEventClientFromMap({
 			transport,
 			eventMap: {
 				"events.order.created": { topic: "orders" },
 			},
 		});
 
-		await client.publish(bindingRef("events.order.created"), { orderId: "x" });
+		await client.publish(eventBindingRef("events.order.created"), {
+			orderId: "x",
+		});
 
 		expect(receivedTopic === "orders").toBe(true);
 		expect(receivedOptions).toBeUndefined();
+	});
+
+	test("rejects non-event binding refs", async () => {
+		const transport = {
+			async publish() {},
+		};
+
+		const client = createEventClient({
+			transport,
+			bindings,
+		});
+
+		await expect(
+			client.publishUnknown(httpBindingRef("events.order.created"), {
+				orderId: "x",
+			}),
+		).rejects.toThrow(/Event client received http binding ref; expected event/);
 	});
 });

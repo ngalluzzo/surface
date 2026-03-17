@@ -1,13 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import {
-	defineOperation,
-	type DefaultContext,
-	type OperationRegistry,
-	runCli,
-} from "../../src/index.js";
-import { createMockContext } from "../fixtures/context.js";
-import { createRegistryWithMinimalOp } from "../fixtures/operations.js";
 import { z } from "zod";
+import { defineOperation, defineRegistry, runCli } from "../../src/index.js";
+import { createMockContext } from "../fixtures/context.js";
+import {
+	createMinimalOp,
+	createRegistryWithMinimalOp,
+} from "../fixtures/operations.js";
 
 const ctx = createMockContext();
 
@@ -69,9 +67,7 @@ describe("runCli", () => {
 
 	test("--dry-run runs validation and guards but skips handler, exits 0", async () => {
 		let handlerRan = false;
-		const registry = createRegistryWithMinimalOp();
-		const op = registry.get("test.echo");
-		if (!op) throw new Error("Expected test.echo");
+		const op = createMinimalOp();
 		const opWithSpy = {
 			...op,
 			handler: async (payload: unknown) => {
@@ -79,8 +75,7 @@ describe("runCli", () => {
 				return { ok: true as const, value: payload };
 			},
 		};
-		const regWithSpy = new Map(registry);
-		regWithSpy.set("test.echo", opWithSpy);
+		const regWithSpy = defineRegistry("test", [opWithSpy]);
 
 		const exitCalls: number[] = [];
 		const originalExit = process.exit;
@@ -95,12 +90,7 @@ describe("runCli", () => {
 		};
 
 		try {
-			await runCli(regWithSpy as typeof registry, ctx, [
-				"test echo",
-				"--id",
-				"x",
-				"--dry-run",
-			]);
+			await runCli(regWithSpy, ctx, ["test echo", "--id", "x", "--dry-run"]);
 		} catch {
 			// ignore
 		}
@@ -148,10 +138,7 @@ describe("runCli", () => {
 				},
 			},
 		});
-		const registry = new Map([
-			[opA.name, opA],
-			[opB.name, opB],
-		]) as OperationRegistry<DefaultContext>;
+		const registry = defineRegistry("test", [opA, opB]);
 
 		await expect(runCli(registry, ctx, ["duplicate command"])).rejects.toThrow(
 			'Duplicate cli command "duplicate command"',

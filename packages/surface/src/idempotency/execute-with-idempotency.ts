@@ -1,14 +1,15 @@
-import type { ZodType } from "zod";
 import type { BindingMeta, BindingRef } from "../bindings";
 import { execute } from "../execution/execute";
 import type { Result } from "../execution/result";
 import type {
+	AnyOperation,
 	BaseSurfaceConfig,
 	DefaultContext,
 	ExecutionError,
 	ExposeSurface,
+	InputOf,
 	LifecycleHooks,
-	Operation,
+	OutputOf,
 } from "../operation/types";
 import type { IdempotencyStore } from "./types";
 
@@ -23,16 +24,14 @@ export function executeWithIdempotency(
 	ttlMs: number,
 ): typeof execute {
 	return async <
-		TPayload,
-		TOutput,
-		TError extends string,
+		TOperation extends AnyOperation<C>,
 		C extends DefaultContext = DefaultContext,
 	>(
-		op: Operation<ZodType, TPayload, TOutput, TError, C>,
+		op: TOperation,
 		raw: unknown,
 		ctx: C,
 		surface: ExposeSurface,
-		surfaceConfig: BaseSurfaceConfig<TPayload, C> | undefined,
+		surfaceConfig: BaseSurfaceConfig<InputOf<TOperation>, C> | undefined,
 		options?: {
 			hooks?: LifecycleHooks;
 			signal?: AbortSignal;
@@ -40,7 +39,7 @@ export function executeWithIdempotency(
 			idempotencyKey?: string;
 			binding?: BindingRef | BindingMeta;
 		},
-	): Promise<Result<TOutput, ExecutionError>> => {
+	): Promise<Result<OutputOf<TOperation>, ExecutionError>> => {
 		const key = options?.idempotencyKey;
 		if (!key) {
 			return execute(op, raw, ctx, surface, surfaceConfig, options);
@@ -48,17 +47,10 @@ export function executeWithIdempotency(
 
 		const cached = await store.get(op.name, key);
 		if (cached !== null) {
-			return cached as Result<TOutput, ExecutionError>;
+			return cached as Result<OutputOf<TOperation>, ExecutionError>;
 		}
 
-		const result = await execute(
-			op,
-			raw,
-			ctx,
-			surface,
-			surfaceConfig,
-			options,
-		);
+		const result = await execute(op, raw, ctx, surface, surfaceConfig, options);
 		if (result.ok) {
 			await store.set(op.name, key, result, ttlMs);
 		}

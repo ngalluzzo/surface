@@ -76,7 +76,7 @@ export async function runCli<C extends DefaultContext = DefaultContext>(
 			: { binding };
 	const result = await execute(op, raw, ctx, "cli", config, executeOptions);
 
-	if (!result.ok) {
+	if (result.ok === false) {
 		const { error } = result;
 		switch (error.phase) {
 			case "surface-guard":
@@ -139,7 +139,9 @@ export async function runCli<C extends DefaultContext = DefaultContext>(
 }
 
 const printHelp = <C extends DefaultContext>(
-	bindings: ReturnType<typeof normalizeSurfaceBindings<"cli", C>>,
+	bindings: ReturnType<
+		typeof normalizeSurfaceBindings<OperationRegistry<C>, "cli">
+	>,
 ): void => {
 	console.log("Available commands:\n");
 	for (const binding of bindings) {

@@ -12,8 +12,8 @@ describe("testOperation", () => {
 	test("valid payload runs validation, domain guards and handler, returns value", async () => {
 		const result = await testOperation(createMinimalOp(), { id: "x" }, ctx);
 		expect(result.ok).toBe(true);
-		if (!result.ok) return;
-		expect(result.value).toEqual({ id: "x" });
+		if (result.ok === false) return;
+		expect((result as { value: unknown }).value).toEqual({ id: "x" });
 	});
 
 	test("validation failure returns validation error", async () => {
@@ -47,7 +47,7 @@ describe("testOperation", () => {
 			dryRun: true,
 		});
 		expect(result.ok).toBe(true);
-		if (!result.ok) return;
+		if (result.ok === false) return;
 		expect(result.value).toBeUndefined();
 		expect(handlerRan).toBe(false);
 	});

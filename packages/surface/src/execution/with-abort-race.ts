@@ -57,6 +57,7 @@ export async function withAbortRace<TOutput>(
 	if (timeoutId !== undefined) clearTimeout(timeoutId);
 	if (
 		!result.ok &&
+		result.ok === false &&
 		(result.error.phase === "timeout" || result.error.phase === "aborted")
 	) {
 		controller?.abort();

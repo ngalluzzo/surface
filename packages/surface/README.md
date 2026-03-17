@@ -98,11 +98,26 @@ Most backend operations need to be callable from more than one place. A registra
 
 **Operation** — a name, a Zod input schema, an output schema, domain guards, a handler, and named bindings for each surface. The complete definition of a thing your system can do.
 
+Binding names, like operation names, cannot contain `:` because serialized binding keys use `operationName:bindingName`.
+
 **Registry** — a named collection of operations for one domain. Composed into a root registry at startup.
 
 **Surface** — a transport that receives input and invokes operations. HTTP, CLI, job runner, cron scheduler, event bus, webhook receiver, GraphQL server, MCP server.
 
 **execute()** — the only way to run an operation. Runs four phases in order: surface guards → schema validation → domain guards → handler. Surface adapters never call guards or handlers directly.
+
+```ts
+import { createOps } from "@gooios/surface";
+
+const ops = createOps<{ db: Database }>();
+
+const result = await ops.execute(registerOperation, payload, { db }, {
+  surface: "http",
+  binding: "admin",
+});
+```
+
+If a surface has a single binding, or one of its bindings is named `default`, you can omit `binding`. If a surface exposes multiple bindings and none is named `default`, `binding` is required.
 
 ---
 
@@ -436,7 +451,7 @@ expose: {
 
 ### WebSocket — `buildWsHandlers`
 
-RPC over a persistent connection: client sends `{ op, payload?, id? }`, adapter runs `execute(op, payload, ctx, "ws")` and sends back `{ id?, ok, value? | error? }`. For stream operations (`outputChunkSchema`), the adapter sends multiple messages: `{ id?, ok: true, stream: true, chunk }` per chunk and `{ id?, ok: true, stream: true, done: true }` at the end (see [Streaming](#streaming)). Context is per-connection via `getContext(connection)` so handlers can access the connection and a subscription hub. You own the server; wire the returned `onConnect`, `onMessage`, and `onDisconnect` to your WebSocket server.
+RPC over a persistent connection: client sends `{ op, payload?, id? }`, the adapter resolves the correct WS binding, runs `execute(...)`, and sends back `{ id?, ok, value? | error? }`. For stream operations (`outputChunkSchema`), the adapter sends multiple messages: `{ id?, ok: true, stream: true, chunk }` per chunk and `{ id?, ok: true, stream: true, done: true }` at the end (see [Streaming](#streaming)). Context is per-connection via `getContext(connection)` so handlers can access the connection and a subscription hub. You own the server; wire the returned `onConnect`, `onMessage`, and `onDisconnect` to your WebSocket server.
 
 **Subscriptions**: Define an operation (e.g. `subscriptions.subscribe`) exposed on `ws` with schema `{ topic: string }`. In the handler, call `ctx.hub.subscribe(ctx.connection, payload.topic)`. Use `createSubscriptionHub()` for an in-memory hub; call `hub.publish(topic, data)` from anywhere to push `{ type: "push", topic, data }` to all subscribed connections. Call `hub.unsubscribe(connection)` from `onDisconnect` to clean up.
 
@@ -481,53 +496,94 @@ When an operation has more than one WS binding, clients can include `binding` in
 
 The operation is the contract in both directions. Surfaces receive input and call `execute()`; **typed clients** let you invoke operations from callers with the same payload types and error model — no codegen, no manual HTTP status mapping.
 
-You define a **registry type** (or import it from a shared package) mapping operation names to input/output. The package exposes generic client factories; once you provide that type, calls are fully typed.
+The primary path is now:
 
-### Registry type
+1. define operations
+2. group them with `defineRegistry(...)`
+3. derive surface bindings from that registry
+4. pass those bindings into the client constructor
 
-Define an object type that lists each operation and its input/output (e.g. from your Zod schemas):
+The client infers payloads, results, and binding refs directly from the bindings. You do not need to write a manual registry contract for the common path.
+
+### Typed registry
 
 ```ts
-import type { RegistryContract } from "@gooios/surface/client";
+import { defineOperation, defineRegistry } from "@gooios/surface";
+import { z } from "zod/v4";
 
-type AppRegistry = {
-  "registrations.register": {
-    input: {
-      personId: string;
-      eventId: string;
-      eventCapacity: number;
-      confirmedCount: number;
-    };
-    output: { registrationId: string; confirmedAt: string };
-  };
-  "registrations.get": {
-    input: { registrationId: string };
-    output: { personId: string; eventId: string; confirmedAt: string };
-  };
-};
+const registerOperation = defineOperation({
+  name: "registrations.register",
+  schema: z.object({
+    personId: z.string(),
+    eventId: z.string(),
+    eventCapacity: z.number().int().positive(),
+    confirmedCount: z.number().int().min(0),
+  }),
+  outputSchema: z.object({
+    registrationId: z.string(),
+    confirmedAt: z.string().datetime(),
+  }),
+  handler: async (payload, ctx) => register({ db: ctx.db, ...payload }),
+  expose: {
+    http: {
+      default: { method: "POST", path: "/registrations" },
+      admin: { method: "POST", path: "/admin/registrations" },
+    },
+    event: {
+      default: {
+        source: "app",
+        topic: "registrations.requested",
+        parsePayload: (raw) => raw,
+      },
+    },
+  },
+});
+
+const getRegistration = defineOperation({
+  name: "registrations.get",
+  schema: z.object({ registrationId: z.string() }),
+  outputSchema: z.object({
+    personId: z.string(),
+    eventId: z.string(),
+    confirmedAt: z.string(),
+  }),
+  handler: async ({ registrationId }, ctx) =>
+    loadRegistration(ctx.db, registrationId),
+  expose: {
+    http: {
+      default: { method: "GET", path: "/registrations/:registrationId" },
+    },
+  },
+});
+
+export const registry = defineRegistry("registrations", [
+  registerOperation,
+  getRegistration,
+] as const);
 ```
-
-Use this type with all clients below. The server builds runtime maps (method+path, topic, etc.) from the same registry; the client stays in sync via types.
 
 When a surface has multiple bindings for the same operation, generated binding keys use:
 - the operation name for the `default` binding
 - `operationName:bindingName` for additional bindings
 
-Use `bindingRef(operation, binding?)` when you want a structured reference instead of a serialized key.
+Use surface-aware helpers like `httpBindingRef(...)`, `eventBindingRef(...)`, and `jobBindingRef(...)` when you want a structured reference instead of a serialized key.
 
 ### HTTP client — `@gooios/surface/client`
 
 Framework-agnostic fetch-based client. Returns `Promise<Result<TOutput, ExecutionError>>` — the same shape the server sends in the response body.
 
-```ts
-import { bindingRef, buildHttpBindingsFromRegistry } from "@gooios/surface";
-import { createClient } from "@gooios/surface/client";
-import type { AppRegistry } from "./registry";
+The standard HTTP client is for **non-stream** HTTP bindings. `buildHttpBindingsFromRegistry(...)` intentionally omits operations with `outputChunkSchema`; stream operations need a custom fetch/`ReadableStream` client or the WS surface.
 
-// Build binding definitions from the server registry (or maintain manually)
+```ts
+import {
+  buildHttpBindingsFromRegistry,
+  createClient,
+  httpBindingRef,
+} from "@gooios/surface";
+
 const bindings = buildHttpBindingsFromRegistry(registry);
 
-const client = createClient<AppRegistry>({
+const client = createClient({
   baseUrl: "https://api.example.com",
   headers: () => ({ Authorization: `Bearer ${getToken()}` }),
   bindings,
@@ -549,7 +605,7 @@ await client.invoke(client.bindings["registrations.register"], {
   confirmedCount: 10,
 });
 
-await client.invoke(bindingRef("registrations.register", "admin"), {
+await client.invoke(httpBindingRef("registrations.register", "admin"), {
   personId: "p1",
   eventId: "e1",
   eventCapacity: 50,
@@ -565,16 +621,20 @@ if (result.ok) {
 
 Use in server-side callers, CLI scripts, tests, or any non-React context. No React or TanStack Query required.
 
-`httpMap` is still accepted for compatibility, but `bindings` is the primary API.
+`createClientFromHttpMap(...)` is still available as a compatibility fallback, but `bindings` is the primary API.
 
 ### Job client — `@gooios/surface/job-client`
 
 Type-safe enqueue. Payload is typed per operation; wrong shape is a compile error instead of a runtime failure in the worker.
 
+Like the runner adapter, `buildJobBindingsFromRegistry(...)` excludes stream jobs (`outputChunkSchema`), so the standard job client only exposes jobs the package can actually register.
+
 ```ts
-import { bindingRef } from "@gooios/surface";
-import { createJobClient } from "@gooios/surface/job-client";
-import type { AppRegistry } from "./registry";
+import {
+  buildJobBindingsFromRegistry,
+  createJobClient,
+  jobBindingRef,
+} from "@gooios/surface";
 
 const enqueue = {
   async enqueue(
@@ -586,7 +646,10 @@ const enqueue = {
   },
 };
 
-const jobs = createJobClient<AppRegistry>(enqueue);
+const jobs = createJobClient({
+  enqueue,
+  bindings: buildJobBindingsFromRegistry(registry),
+});
 
 await jobs.enqueue("registrations.register", {
   personId: "p1",
@@ -601,7 +664,7 @@ await jobs.enqueue("registrations.register", payload, {
 });
 
 // Binding-aware enqueue for non-default bindings
-await jobs.enqueue(bindingRef("registrations.register", "backfill"), payload);
+await jobs.enqueue(jobBindingRef("registrations.register", "backfill"), payload);
 ```
 
 Queue, retries, and timeout come from the operation’s job config on the worker; the client only sends name, payload, and optional key.
@@ -610,33 +673,37 @@ Queue, retries, and timeout come from the operation’s job config on the worker
 
 Type-safe publish. Topic and source come from the event map (built from the operation’s event config), not from the call site.
 
+Like the consumer adapter, `buildEventBindingsFromRegistry(...)` excludes stream operations (`outputChunkSchema`), so the standard event client only exposes publishable bindings that match the package’s consumer support.
+
 ```ts
-import { bindingRef, buildEventBindingsFromRegistry } from "@gooios/surface";
-import { createEventClient } from "@gooios/surface/event-client";
-import type { AppRegistry } from "./registry";
+import {
+  buildEventBindingsFromRegistry,
+  createEventClient,
+  eventBindingRef,
+} from "@gooios/surface";
 
 const bindings = buildEventBindingsFromRegistry(registry);
 
-const events = createEventClient<AppRegistry>({
+const events = createEventClient({
   transport: sqsTransport, // { publish(topic, payload, options?) }
   bindings,
 });
 
-await events.publish("registrations.requested", {
+await events.publish("registrations.register", {
   personId: "p1",
   eventId: "e1",
   eventCapacity: 50,
   confirmedCount: 10,
 });
 
-await events.publish(events.bindings["registrations.requested"], {
+await events.publish(events.bindings["registrations.register"], {
   personId: "p1",
   eventId: "e1",
   eventCapacity: 50,
   confirmedCount: 10,
 });
 
-await events.publish(bindingRef("registrations.requested", "stripe"), {
+await events.publish(eventBindingRef("registrations.register", "stripe"), {
   personId: "p1",
   eventId: "e1",
   eventCapacity: 50,
@@ -646,7 +713,7 @@ await events.publish(bindingRef("registrations.requested", "stripe"), {
 
 Fire-and-forget; no return value.
 
-`eventMap` is still accepted for compatibility, but `bindings` is the primary API.
+`createEventClientFromMap(...)` is still available as a compatibility fallback, but `bindings` is the primary API.
 
 ### React Query — `@gooios/surface/client/react`
 
@@ -655,13 +722,11 @@ Thin wrapper over the HTTP client. Use `useOperationQuery` for read-like operati
 Requires `react` and `@tanstack/react-query` as peer dependencies.
 
 ```ts
-import { buildHttpBindingsFromRegistry } from "@gooios/surface";
-import { createClient } from "@gooios/surface/client";
+import { buildHttpBindingsFromRegistry, createClient } from "@gooios/surface";
 import { useOperationQuery, useOperationMutation } from "@gooios/surface/client/react";
-import type { AppRegistry } from "./registry";
 
 const bindings = buildHttpBindingsFromRegistry(registry);
-const client = createClient<AppRegistry>({ baseUrl: "/api", bindings });
+const client = createClient({ baseUrl: "/api", bindings });
 
 // Read-like (e.g. GET)
 function RegistrationDetails({ id }: { id: string }) {
@@ -710,6 +775,15 @@ if (issues.length > 0) {
 Surface builders that detect these collisions throw `BindingValidationError`, which carries the same `issues` array.
 
 If you only want to validate one surface, use `validateSurfaceBindings(registry, "http")` or the corresponding surface name.
+
+### Compatibility path
+
+Manual maps and manual registry contracts still exist for migration work:
+- `createClientFromHttpMap(...)`
+- `createEventClientFromMap(...)`
+- `createJobClientFromBindings(...)`
+
+They are intentionally secondary. The recommended path is typed registries plus derived bindings.
 
 ---
 

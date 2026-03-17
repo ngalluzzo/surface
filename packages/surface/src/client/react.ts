@@ -10,36 +10,42 @@ import type {
 	UseQueryResult,
 } from "@tanstack/react-query";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import type { Result } from "../execution/result";
 import type { ExecutionError } from "../operation/types";
-import type { ClientMap, RegistryContract } from "./types";
+import type { ClientMap, HttpBindingsRecord } from "./types";
+
+type ClientResult<
+	TBindings extends HttpBindingsRecord,
+	K extends keyof TBindings,
+> = Awaited<ReturnType<ClientMap<TBindings>[K]>>;
 
 /**
  * useOperationQuery — for read-like operations (e.g. GET).
  * queryKey is [opName, input]; queryFn calls client[opName](input).
  */
 export function useOperationQuery<
-	R extends RegistryContract,
-	K extends keyof R,
+	TBindings extends HttpBindingsRecord,
+	K extends keyof TBindings,
 >(
-	client: ClientMap<R>,
+	client: ClientMap<TBindings>,
 	opName: K,
-	input: R[K]["input"],
+	input: Parameters<ClientMap<TBindings>[K]>[0],
 	options?: Omit<
 		UseQueryOptions<
-			Result<R[K]["output"], ExecutionError>,
+			ClientResult<TBindings, K>,
 			ExecutionError,
-			Result<R[K]["output"], ExecutionError>,
-			[K, R[K]["input"]]
+			ClientResult<TBindings, K>,
+			[K, Parameters<ClientMap<TBindings>[K]>[0]]
 		>,
 		"queryKey" | "queryFn"
 	>,
-): UseQueryResult<Result<R[K]["output"], ExecutionError>, ExecutionError> {
+): UseQueryResult<ClientResult<TBindings, K>, ExecutionError> {
 	return useQuery({
 		...options,
 		queryKey: [opName, input],
-		queryFn: () => client[opName](input),
-	});
+		queryFn: (() => client[opName](input)) as () => Promise<
+			ClientResult<TBindings, K>
+		>,
+	}) as UseQueryResult<ClientResult<TBindings, K>, ExecutionError>;
 }
 
 /**
@@ -47,26 +53,33 @@ export function useOperationQuery<
  * Call mutate(input) or mutateAsync(input) with the operation payload.
  */
 export function useOperationMutation<
-	R extends RegistryContract,
-	K extends keyof R,
+	TBindings extends HttpBindingsRecord,
+	K extends keyof TBindings,
 >(
-	client: ClientMap<R>,
+	client: ClientMap<TBindings>,
 	opName: K,
 	options?: Omit<
 		UseMutationOptions<
-			Result<R[K]["output"], ExecutionError>,
+			ClientResult<TBindings, K>,
 			ExecutionError,
-			R[K]["input"]
+			Parameters<ClientMap<TBindings>[K]>[0]
 		>,
 		"mutationFn"
 	>,
 ): UseMutationResult<
-	Result<R[K]["output"], ExecutionError>,
+	ClientResult<TBindings, K>,
 	ExecutionError,
-	R[K]["input"]
+	Parameters<ClientMap<TBindings>[K]>[0]
 > {
 	return useMutation({
 		...options,
-		mutationFn: (input: R[K]["input"]) => client[opName](input),
-	});
+		mutationFn: ((input: Parameters<ClientMap<TBindings>[K]>[0]) =>
+			client[opName](input)) as (
+			input: Parameters<ClientMap<TBindings>[K]>[0],
+		) => Promise<ClientResult<TBindings, K>>,
+	}) as UseMutationResult<
+		ClientResult<TBindings, K>,
+		ExecutionError,
+		Parameters<ClientMap<TBindings>[K]>[0]
+	>;
 }

@@ -1,9 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import {
-	type DefaultContext,
-	type OperationRegistry,
-	registerCronOperations,
-} from "../../src/index.js";
+import { defineRegistry, registerCronOperations } from "../../src/index.js";
 import { createMockContext } from "../fixtures/context.js";
 import { createMockCronScheduler } from "../fixtures/mock-cron-scheduler.js";
 import { createRegistryWithMinimalOp } from "../fixtures/operations.js";
@@ -57,9 +53,7 @@ describe("registerCronOperations", () => {
 				},
 			},
 		});
-		const registry = new Map([
-			["test.cronValidationFail", op],
-		]) as OperationRegistry<DefaultContext>;
+		const registry = defineRegistry("test", [op]);
 		const { scheduler, fire } = createMockCronScheduler();
 		const ctx = createMockContext();
 		registerCronOperations(registry, scheduler, ctx);
@@ -89,9 +83,7 @@ describe("registerCronOperations", () => {
 				},
 			},
 		});
-		const registry = new Map([
-			["test.cronGuarded", op],
-		]) as OperationRegistry<DefaultContext>;
+		const registry = defineRegistry("test", [op]);
 		const { scheduler, fire } = createMockCronScheduler();
 		const ctx = createMockContext();
 		registerCronOperations(registry, scheduler, ctx);
@@ -117,9 +109,7 @@ describe("registerCronOperations", () => {
 				},
 			},
 		});
-		const registry = new Map([
-			["test.cronHandlerFail", op],
-		]) as OperationRegistry<DefaultContext>;
+		const registry = defineRegistry("test", [op]);
 		const { scheduler, fire } = createMockCronScheduler();
 		const ctx = createMockContext();
 		registerCronOperations(registry, scheduler, ctx);
@@ -146,9 +136,7 @@ describe("registerCronOperations", () => {
 				},
 			},
 		});
-		const registry = new Map([
-			["test.cronAsyncPayload", op],
-		]) as OperationRegistry<DefaultContext>;
+		const registry = defineRegistry("test", [op]);
 		const { scheduler, fire } = createMockCronScheduler();
 		const ctx = createMockContext();
 		registerCronOperations(registry, scheduler, ctx);

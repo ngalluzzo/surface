@@ -1,55 +1,98 @@
-import type { ZodType } from "zod";
-import {
-	type BindingDefinition,
-	bindingRef,
-	serializeBindingRef,
-} from "../bindings";
+import type { BindingDefinition, BindingKey, BindingRef } from "../bindings";
+import { bindingRef, serializeBindingRef } from "../bindings";
 import type {
 	AnyOperation,
-	DefaultContext,
 	ExposeSurface,
-	Operation,
+	OperationNameOf,
 	OperationRegistry,
-	SurfaceBindingConfigMap,
-	SurfaceBindings,
+	OperationRegistryWithHooks,
+	OperationsOf,
 } from "../operation/types";
-import type { OperationRegistryWithHooks } from "./define-registry";
+
+// biome-ignore lint/suspicious/noExplicitAny: normalized binding helpers intentionally erase registry context variance.
+type ErasedRegistryContext = any;
+
+type SurfaceBindingMapFor<
+	TOperation extends AnyOperation,
+	S extends ExposeSurface,
+> = Extract<TOperation["expose"][S], Record<string, unknown>>;
+
+type SurfaceBindingNamesFor<
+	TOperation extends AnyOperation,
+	S extends ExposeSurface,
+> = Extract<keyof SurfaceBindingMapFor<TOperation, S>, string>;
+
+export type OperationSurfaceBindingUnion<
+	TOperation extends AnyOperation,
+	S extends ExposeSurface,
+> = {
+	[TBindingName in SurfaceBindingNamesFor<
+		TOperation,
+		S
+	>]: NormalizedSurfaceBinding<S, TOperation, TBindingName>;
+}[SurfaceBindingNamesFor<TOperation, S>];
+
+type NormalizedSurfaceBindingConfig<
+	TOperation extends AnyOperation,
+	S extends ExposeSurface,
+	TBindingName extends string,
+> = SurfaceBindingMapFor<TOperation, S>[Extract<
+	TBindingName,
+	keyof SurfaceBindingMapFor<TOperation, S>
+>];
+
+export type RegistrySurfaceBindingUnion<
+	TRegistry extends
+		| OperationRegistry<ErasedRegistryContext, readonly AnyOperation[]>
+		| OperationRegistryWithHooks<
+				ErasedRegistryContext,
+				readonly AnyOperation[]
+		  >,
+	S extends ExposeSurface,
+> = NormalizedSurfaceBinding<
+	S,
+	OperationsOf<TRegistry>[number],
+	SurfaceBindingNamesFor<OperationsOf<TRegistry>[number], S>
+>;
+
+export type ResolvedOperationSurfaceBinding<
+	TOperation extends AnyOperation,
+	S extends ExposeSurface,
+	TBindingName extends string | undefined = undefined,
+> = [TBindingName] extends [string]
+	?
+			| Extract<
+					OperationSurfaceBindingUnion<TOperation, S>,
+					{ bindingName: TBindingName }
+			  >
+			| undefined
+	: OperationSurfaceBindingUnion<TOperation, S> | undefined;
 
 export interface NormalizedSurfaceBinding<
-	S extends ExposeSurface,
-	C extends DefaultContext = DefaultContext,
-	TPayload = unknown,
-> extends BindingDefinition {
-	bindingId: string;
-	bindingName: string;
+	S extends ExposeSurface = ExposeSurface,
+	TOperation extends AnyOperation = AnyOperation,
+	TBindingName extends string = string,
+> extends BindingDefinition<
+		BindingKey<OperationNameOf<TOperation>, TBindingName>,
+		BindingRef<S, OperationNameOf<TOperation>, TBindingName>
+	> {
+	bindingId: BindingKey<OperationNameOf<TOperation>, TBindingName>;
+	bindingName: TBindingName;
 	surface: S;
-	operationName: string;
-	op: Operation<ZodType, TPayload, unknown, string, C>;
-	config: SurfaceBindingConfigMap<TPayload, C>[S];
+	operationName: OperationNameOf<TOperation>;
+	op: TOperation;
+	config: NormalizedSurfaceBindingConfig<TOperation, S, TBindingName>;
 }
 
-/**
- * Normalizes the current expose model into explicit binding records.
- * Each surface can expose one or more named bindings per operation.
- * Adapters consume this normalized form instead of reaching into op.expose directly.
- */
-export function normalizeOperationSurfaceBindings<
-	S extends ExposeSurface,
-	TPayload,
-	TOutput,
-	TError extends string,
-	C extends DefaultContext = DefaultContext,
->(
-	op: Operation<ZodType, TPayload, TOutput, TError, C>,
-	surface: S,
-): NormalizedSurfaceBinding<S, C, TPayload>[] {
-	const bindings = op.expose[surface] as
-		| SurfaceBindings<SurfaceBindingConfigMap<TPayload, C>[S]>
-		| undefined;
+function normalizeOperationSurfaceBindingsInternal(
+	op: AnyOperation,
+	surface: ExposeSurface,
+): NormalizedSurfaceBinding[] {
+	const bindings = op.expose[surface] as Record<string, unknown> | undefined;
 	if (bindings === undefined) return [];
 
 	return Object.entries(bindings).map(([bindingName, config]) => {
-		const ref = bindingRef(op.name, bindingName);
+		const ref = bindingRef(surface, op.name, bindingName);
 		const key = serializeBindingRef(ref);
 		return {
 			key,
@@ -59,22 +102,45 @@ export function normalizeOperationSurfaceBindings<
 			surface,
 			operationName: op.name,
 			op,
-			config,
+			config: config as never,
 		};
 	});
 }
 
-export function normalizeSurfaceBindings<
+/**
+ * Normalizes the current expose model into explicit binding records.
+ * Each surface can expose one or more named bindings per operation.
+ * Adapters consume this normalized form instead of reaching into op.expose directly.
+ */
+export function normalizeOperationSurfaceBindings<
+	TOperation extends AnyOperation,
 	S extends ExposeSurface,
-	C extends DefaultContext = DefaultContext,
+>(op: TOperation, surface: S): OperationSurfaceBindingUnion<TOperation, S>[] {
+	return normalizeOperationSurfaceBindingsInternal(
+		op,
+		surface,
+	) as unknown as OperationSurfaceBindingUnion<TOperation, S>[];
+}
+
+export function normalizeSurfaceBindings<
+	TRegistry extends
+		| OperationRegistry<ErasedRegistryContext, readonly AnyOperation[]>
+		| OperationRegistryWithHooks<
+				ErasedRegistryContext,
+				readonly AnyOperation[]
+		  >,
+	S extends ExposeSurface,
 >(
-	registry: OperationRegistry<C> | OperationRegistryWithHooks<C>,
+	registry: TRegistry,
 	surface: S,
-): NormalizedSurfaceBinding<S, C>[] {
-	const bindings: NormalizedSurfaceBinding<S, C>[] = [];
+): RegistrySurfaceBindingUnion<TRegistry, S>[] {
+	const bindings: RegistrySurfaceBindingUnion<TRegistry, S>[] = [];
 	for (const [, op] of registry) {
 		bindings.push(
-			...normalizeOperationSurfaceBindings(op as AnyOperation<C>, surface),
+			...(normalizeOperationSurfaceBindingsInternal(
+				op as AnyOperation,
+				surface,
+			) as unknown as RegistrySurfaceBindingUnion<TRegistry, S>[]),
 		);
 	}
 	return bindings;
@@ -82,35 +148,50 @@ export function normalizeSurfaceBindings<
 
 export function getSurfaceBindingLookupKey<
 	S extends ExposeSurface,
-	C extends DefaultContext = DefaultContext,
-	TPayload = unknown,
->(binding: NormalizedSurfaceBinding<S, C, TPayload>): string {
+	TOperation extends AnyOperation,
+	TBindingName extends string,
+>(
+	binding: NormalizedSurfaceBinding<S, TOperation, TBindingName>,
+): BindingKey<OperationNameOf<TOperation>, TBindingName> {
 	return binding.key;
 }
 
 export function resolveOperationSurfaceBinding<
+	TOperation extends AnyOperation,
 	S extends ExposeSurface,
-	TPayload,
-	TOutput,
-	TError extends string,
-	C extends DefaultContext = DefaultContext,
+	TBindingName extends string | undefined = undefined,
 >(
-	op: Operation<ZodType, TPayload, TOutput, TError, C>,
+	op: TOperation,
 	surface: S,
-	bindingName?: string,
-): NormalizedSurfaceBinding<S, C, TPayload> | undefined {
-	const bindings = normalizeOperationSurfaceBindings(op, surface);
+	bindingName?: TBindingName,
+): ResolvedOperationSurfaceBinding<TOperation, S, TBindingName> {
+	const bindings = normalizeOperationSurfaceBindingsInternal(
+		op,
+		surface,
+	) as unknown as OperationSurfaceBindingUnion<TOperation, S>[];
 	if (bindings.length === 0) return undefined;
 
 	if (bindingName !== undefined) {
-		return bindings.find((binding) => binding.bindingName === bindingName);
+		return bindings.find(
+			(binding) => binding.bindingName === (bindingName as string),
+		) as ResolvedOperationSurfaceBinding<TOperation, S, TBindingName>;
 	}
 
-	if (bindings.length === 1) return bindings[0];
+	if (bindings.length === 1)
+		return bindings[0] as ResolvedOperationSurfaceBinding<
+			TOperation,
+			S,
+			TBindingName
+		>;
 	const defaultBinding = bindings.find(
 		(binding) => binding.bindingName === "default",
 	);
-	if (defaultBinding) return defaultBinding;
+	if (defaultBinding)
+		return defaultBinding as ResolvedOperationSurfaceBinding<
+			TOperation,
+			S,
+			TBindingName
+		>;
 
 	throw new Error(
 		`Operation "${op.name}" exposes multiple ${surface} bindings; specify a binding name`,

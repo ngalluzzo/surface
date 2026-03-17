@@ -1,4 +1,5 @@
 import type { ZodType } from "zod";
+import type { HttpBindingsFromRegistry } from "../../client";
 import { execute, getHooks } from "../../execution";
 import type { IdempotencyStore } from "../../idempotency";
 import { executeWithIdempotency } from "../../idempotency";
@@ -171,7 +172,7 @@ export function buildHttpHandlers<C extends DefaultContext = DefaultContext>(
 					: { binding };
 			const result = await exec(op, req.body, ctx, "http", config, opts);
 
-			if (!result.ok) {
+			if (result.ok === false) {
 				const { error } = result;
 				const status =
 					config.errorStatus?.[error.phase] ??
@@ -204,44 +205,38 @@ export function buildHttpHandlers<C extends DefaultContext = DefaultContext>(
  * Default bindings use the operation name; additional bindings use binding-aware keys.
  */
 export function buildHttpMapFromRegistry<
-	C extends DefaultContext = DefaultContext,
+	TRegistry extends OperationRegistry | OperationRegistryWithHooks,
 >(
-	registry: OperationRegistry<C> | OperationRegistryWithHooks<C>,
-): Record<string, { method: string; path: string }> {
+	registry: TRegistry,
+): {
+	[K in keyof HttpBindingsFromRegistry<TRegistry>]: {
+		method: string;
+		path: string;
+	};
+} {
 	const map: Record<string, { method: string; path: string }> = {};
-	for (const [key, binding] of Object.entries(
-		buildHttpBindingsFromRegistry(registry),
-	)) {
+	const bindings = buildHttpBindingsFromRegistry(registry);
+	for (const key of Object.keys(bindings) as Array<
+		keyof HttpBindingsFromRegistry<TRegistry> & string
+	>) {
+		const binding = bindings[key];
 		map[key] = { method: binding.method, path: binding.path };
 	}
 	return map;
 }
 
 export function buildHttpBindingsFromRegistry<
-	C extends DefaultContext = DefaultContext,
->(
-	registry: OperationRegistry<C> | OperationRegistryWithHooks<C>,
-): Record<
-	string,
-	{
-		key: string;
-		ref: { operation: string; binding: string };
-		method: string;
-		path: string;
-	}
-> {
-	const httpBindings = normalizeSurfaceBindings(registry, "http");
+	TRegistry extends OperationRegistry | OperationRegistryWithHooks,
+>(registry: TRegistry): HttpBindingsFromRegistry<TRegistry> {
+	const httpBindings = normalizeSurfaceBindings(registry, "http").filter(
+		(binding) => binding.op.outputChunkSchema == null,
+	);
 	assertNoBindingValidationIssues(
 		validateBindingSpecs(httpBindings, [...httpBindingValidationSpecs]),
 	);
 	const map: Record<
 		string,
-		{
-			key: string;
-			ref: { operation: string; binding: string };
-			method: string;
-			path: string;
-		}
+		{ key: string; ref: unknown; method: string; path: string }
 	> = {};
 	for (const binding of httpBindings) {
 		map[getSurfaceBindingLookupKey(binding)] = {
@@ -251,5 +246,5 @@ export function buildHttpBindingsFromRegistry<
 			path: binding.config.path,
 		};
 	}
-	return map;
+	return map as HttpBindingsFromRegistry<TRegistry>;
 }

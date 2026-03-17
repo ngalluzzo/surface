@@ -1,13 +1,14 @@
 import { describe, expect, test } from "bun:test";
 import { graphql } from "graphql";
+import { z } from "zod";
 import {
 	BindingValidationError,
 	buildGraphQLSchema,
 	defineOperation,
+	defineRegistry,
 } from "../../src/index.js";
 import { createMockContext } from "../fixtures/context.js";
 import { createRegistryWithMinimalOp } from "../fixtures/operations.js";
-import { z } from "zod";
 
 describe("buildGraphQLSchema", () => {
 	test("builds schema with mutation field and runs successfully", async () => {
@@ -76,14 +77,10 @@ describe("buildGraphQLSchema", () => {
 				},
 			},
 		});
-		const registry = new Map([
-			[op.name, op],
-		]) as import("../../src/index.js").OperationRegistry<
-			import("../../src/index.js").DefaultContext
-		>;
+		const typedRegistry = defineRegistry("test", [op]);
 		const ctx = createMockContext();
 
-		const schema = await buildGraphQLSchema(registry, ctx);
+		const schema = await buildGraphQLSchema(typedRegistry, ctx);
 		const mutationType = schema.getMutationType();
 		if (!mutationType) throw new Error("Expected mutation type");
 		expect(mutationType.getFields().testEcho).toBeDefined();
@@ -136,12 +133,7 @@ describe("buildGraphQLSchema", () => {
 				},
 			},
 		});
-		const registry = new Map([
-			[opA.name, opA],
-			[opB.name, opB],
-		]) as import("../../src/index.js").OperationRegistry<
-			import("../../src/index.js").DefaultContext
-		>;
+		const registry = defineRegistry("test", [opA, opB]);
 		const ctx = createMockContext();
 
 		await expect(buildGraphQLSchema(registry, ctx)).rejects.toThrow(
@@ -164,11 +156,7 @@ describe("buildGraphQLSchema", () => {
 				},
 			},
 		});
-		const registry = new Map([
-			[op.name, op],
-		]) as import("../../src/index.js").OperationRegistry<
-			import("../../src/index.js").DefaultContext
-		>;
+		const registry = defineRegistry("test", [op]);
 		const ctx = createMockContext();
 
 		try {

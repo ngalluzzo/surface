@@ -1,10 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { bindingRef } from "../../src/index.js";
+import { httpBindingRef, jobBindingRef } from "../../src/index.js";
 import { createJobClient } from "../../src/job-client/index.js";
-
-type TestRegistry = {
-	"jobs.process": { input: { id: string }; output: unknown };
-};
 
 describe("createJobClient", () => {
 	test("enqueue calls adapter with op name and payload", async () => {
@@ -25,7 +21,16 @@ describe("createJobClient", () => {
 			},
 		};
 
-		const client = createJobClient<TestRegistry>(enqueue);
+		const client = createJobClient({
+			enqueue,
+			bindings: {
+				"jobs.process": {
+					key: "jobs.process",
+					ref: jobBindingRef("jobs.process"),
+					queue: "default",
+				},
+			},
+		});
 		await client.enqueue("jobs.process", payload);
 
 		expect(receivedName === "jobs.process").toBe(true);
@@ -46,7 +51,16 @@ describe("createJobClient", () => {
 			},
 		};
 
-		const client = createJobClient<TestRegistry>(enqueue);
+		const client = createJobClient({
+			enqueue,
+			bindings: {
+				"jobs.process": {
+					key: "jobs.process",
+					ref: jobBindingRef("jobs.process"),
+					queue: "default",
+				},
+			},
+		});
 		await client.enqueue(
 			"jobs.process",
 			{ id: "x" },
@@ -67,9 +81,41 @@ describe("createJobClient", () => {
 			},
 		};
 
-		const client = createJobClient<TestRegistry>(enqueue);
-		await client.enqueue(bindingRef("jobs.process", "backfill"), { id: "x" });
+		const client = createJobClient({
+			enqueue,
+			bindings: {
+				"jobs.process:backfill": {
+					key: "jobs.process:backfill",
+					ref: jobBindingRef("jobs.process", "backfill"),
+					queue: "default",
+				},
+			},
+		});
+		await client.enqueue(jobBindingRef("jobs.process", "backfill"), {
+			id: "x",
+		});
 
 		expect(String(receivedName)).toBe("jobs.process:backfill");
+	});
+
+	test("rejects non-job binding refs", async () => {
+		const enqueue = {
+			async enqueue() {},
+		};
+
+		const client = createJobClient({
+			enqueue,
+			bindings: {
+				"jobs.process": {
+					key: "jobs.process",
+					ref: jobBindingRef("jobs.process"),
+					queue: "default",
+				},
+			},
+		});
+
+		await expect(
+			client.enqueueUnknown(httpBindingRef("jobs.process"), { id: "x" }),
+		).rejects.toThrow(/Job client received http binding ref; expected job/);
 	});
 });

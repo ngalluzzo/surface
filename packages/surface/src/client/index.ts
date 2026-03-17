@@ -1,14 +1,19 @@
 export type { Result } from "../execution/result";
 export type { ExecutionError } from "../operation/types";
-export { createClient } from "./create-client";
+export { createClient, createClientFromHttpMap } from "./create-client";
 export type {
-	ClientMap,
 	ClientInvoke,
+	ClientMap,
 	CreateClientOptions,
+	CreateClientOptionsFromContract,
 	HttpBindingDefinition,
-	HttpBindings,
+	HttpBindingsFromContract,
+	HttpBindingsFromRegistry,
+	HttpBindingsRecord,
 	HttpClient,
 	HttpMap,
+	ManualRegistryClient,
 	OperationContract,
+	RegistryClient,
 	RegistryContract,
 } from "./types";

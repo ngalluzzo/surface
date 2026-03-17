@@ -1,11 +1,21 @@
-import type { DefaultContext, ExposeSurface, OperationRegistry } from "../operation/types";
+import type {
+	AnyOperation,
+	DefaultContext,
+	ExposeSurface,
+	OperationRegistry,
+	OperationRegistryWithHooks,
+} from "../operation/types";
 import "../surfaces";
-import type { OperationRegistryWithHooks } from "./define-registry";
 import type { BindingValidationIssue } from "./binding-validation-core";
-export type { BindingValidationIssue, BindingValidationIssueCode } from "./binding-validation-core";
+
+export type {
+	BindingValidationIssue,
+	BindingValidationIssueCode,
+} from "./binding-validation-core";
 export {
 	assertNoBindingValidationIssues,
 	BindingValidationError,
+	type BindingValidationSpec,
 	collectDuplicateTargetIssues,
 	createDuplicateTargetBindingValidationSpec,
 	formatBindingValidationIssue,
@@ -13,15 +23,15 @@ export {
 	getBindingValidationSpecs,
 	getRegisteredBindingValidationSurfaces,
 	registerBindingValidationSpecs,
-	type BindingValidationSpec,
 	validateBindingSpecs,
 } from "./binding-validation-core";
-import { normalizeSurfaceBindings } from "./normalize-surface-bindings";
+
 import {
 	getBindingValidationSpecs,
 	getRegisteredBindingValidationSurfaces,
 	validateBindingSpecs,
 } from "./binding-validation-core";
+import { normalizeSurfaceBindings } from "./normalize-surface-bindings";
 
 export function validateSurfaceBindings<
 	C extends DefaultContext = DefaultContext,
@@ -34,13 +44,10 @@ export function validateSurfaceBindings<
 		return [];
 	}
 	return validateBindingSpecs(
-		normalizeSurfaceBindings(
-			registry,
-			surface,
-		) as Array<
+		normalizeSurfaceBindings(registry, surface) as Array<
 			import("./normalize-surface-bindings").NormalizedSurfaceBinding<
 				ExposeSurface,
-				any
+				AnyOperation
 			>
 		>,
 		[...specs],

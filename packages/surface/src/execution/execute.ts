@@ -1,13 +1,14 @@
-import type { ZodType } from "zod";
 import { bindingMeta, isBindingRef } from "../bindings";
 import type {
+	AnyOperation,
 	BaseSurfaceConfig,
 	DefaultContext,
 	ExecutionError,
 	ExecutionState,
 	ExposeSurface,
+	InputOf,
 	LifecycleHooks,
-	Operation,
+	OutputOf,
 } from "../operation/types";
 import { applyTimeout } from "./apply-timeout";
 import type { Result } from "./result";
@@ -31,25 +32,25 @@ import { withAbortRace } from "./with-abort-race";
  * @see {@link ExecutionError} for typed phase failures
  */
 export async function execute<
-	TPayload,
-	TOutput,
-	TError extends string,
+	TOperation extends AnyOperation<C>,
 	C extends DefaultContext = DefaultContext,
 >(
-	op: Operation<ZodType, TPayload, TOutput, TError, C>,
+	op: TOperation,
 	raw: unknown,
 	ctx: C,
 	surface: ExposeSurface,
-	surfaceConfig: BaseSurfaceConfig<TPayload, C> | undefined,
+	surfaceConfig: BaseSurfaceConfig<InputOf<TOperation>, C> | undefined,
 	options?: {
 		hooks?: LifecycleHooks;
 		signal?: AbortSignal;
 		dryRun?: boolean;
 		/** When set, adapters can use it for response caching or dedup; execute() does not perform store lookups. */
 		idempotencyKey?: string;
-		binding?: Parameters<typeof bindingMeta>[0] | ReturnType<typeof bindingMeta>;
+		binding?:
+			| Parameters<typeof bindingMeta>[0]
+			| ReturnType<typeof bindingMeta>;
 	},
-): Promise<Result<TOutput, ExecutionError>> {
+): Promise<Result<OutputOf<TOperation>, ExecutionError>> {
 	const { contextToUse, controller, timeoutMs } = applyTimeout(
 		ctx,
 		surfaceConfig,
@@ -59,23 +60,48 @@ export async function execute<
 	const stageEntries = [
 		{
 			phase: "surface-guard" as const,
-			stage: makeSurfaceGuardStage<TPayload, TOutput, TError, C>(),
+			stage: makeSurfaceGuardStage<
+				InputOf<TOperation>,
+				OutputOf<TOperation>,
+				string,
+				C
+			>(),
 		},
 		{
 			phase: "validation" as const,
-			stage: makeValidationStage<TPayload, TOutput, TError, C>(),
+			stage: makeValidationStage<
+				InputOf<TOperation>,
+				OutputOf<TOperation>,
+				string,
+				C
+			>(),
 		},
 		{
 			phase: "domain-guard" as const,
-			stage: makeDomainGuardStage<TPayload, TOutput, TError, C>(),
+			stage: makeDomainGuardStage<
+				InputOf<TOperation>,
+				OutputOf<TOperation>,
+				string,
+				C
+			>(),
 		},
 		{
 			phase: "handler" as const,
-			stage: makeHandlerStage<TPayload, TOutput, TError, C>(),
+			stage: makeHandlerStage<
+				InputOf<TOperation>,
+				OutputOf<TOperation>,
+				string,
+				C
+			>(),
 		},
 	];
 
-	const initialState: ExecutionState<TPayload, TOutput, TError, C> = {
+	const initialState: ExecutionState<
+		InputOf<TOperation>,
+		OutputOf<TOperation>,
+		string,
+		C
+	> = {
 		raw,
 		context: contextToUse,
 		surface,

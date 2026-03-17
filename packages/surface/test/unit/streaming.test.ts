@@ -1,9 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { z } from "zod";
-import type { DefaultContext, Operation } from "../../src/index.js";
+import type { AnyOperation, DefaultContext } from "../../src/index.js";
 import {
 	buildHttpHandlers,
 	buildWsHandlers,
+	defineOperation,
+	defineRegistry,
 	execute,
 	registerJobOperations,
 	resolveOperationSurfaceBinding,
@@ -11,13 +13,8 @@ import {
 import { createMockContext } from "../fixtures/context.js";
 
 const ctx = createMockContext();
-const executeOnHttp = <
-	TPayload,
-	TOutput,
-	TError extends string,
-	C extends DefaultContext = DefaultContext,
->(
-	op: Operation<z.ZodType, TPayload, TOutput, TError, C>,
+const executeOnHttp = <C extends DefaultContext = DefaultContext>(
+	op: AnyOperation<C>,
 	raw: unknown,
 	options?: Parameters<typeof execute>[5],
 ) =>
@@ -48,13 +45,7 @@ async function* streamChunks(count: number): AsyncIterable<Chunk> {
 describe("streaming operations", () => {
 	describe("handler stage", () => {
 		test("when outputChunkSchema is set and handler returns AsyncIterable, execute returns ok with iterable", async () => {
-			const op: Operation<
-				z.ZodObject<{ id: z.ZodString }>,
-				{ id: string },
-				AsyncIterable<Chunk>,
-				string,
-				DefaultContext
-			> = {
+			const op = defineOperation({
 				name: "test.stream",
 				schema: z.object({ id: z.string() }),
 				outputSchema: z.never(),
@@ -64,7 +55,7 @@ describe("streaming operations", () => {
 					return { ok: true, value: streamChunks(n) };
 				},
 				expose: { http: { default: { method: "POST", path: "/stream" } } },
-			};
+			});
 
 			const result = await executeOnHttp(op, { id: "3" });
 			expect(result.ok).toBe(true);
@@ -81,13 +72,7 @@ describe("streaming operations", () => {
 		});
 
 		test("when outputChunkSchema is set but handler returns non-AsyncIterable, execute returns handler error", async () => {
-			const op: Operation<
-				z.ZodObject<{ id: z.ZodString }>,
-				{ id: string },
-				AsyncIterable<Chunk>,
-				string,
-				DefaultContext
-			> = {
+			const op = defineOperation({
 				name: "test.badStream",
 				schema: z.object({ id: z.string() }),
 				outputSchema: z.never(),
@@ -97,7 +82,7 @@ describe("streaming operations", () => {
 					value: invalidStreamValueForTest(),
 				}),
 				expose: { http: { default: { method: "POST", path: "/bad" } } },
-			};
+			});
 
 			const result = await executeOnHttp(op, { id: "x" });
 			expect(result.ok).toBe(false);
@@ -111,13 +96,7 @@ describe("streaming operations", () => {
 
 	describe("HTTP surface", () => {
 		test("stream op returns body as ReadableStream (NDJSON)", async () => {
-			const op: Operation<
-				z.ZodObject<{ id: z.ZodString }>,
-				{ id: string },
-				AsyncIterable<Chunk>,
-				string,
-				DefaultContext
-			> = {
+			const op = defineOperation({
 				name: "test.streamHttp",
 				schema: z.object({ id: z.string() }),
 				outputSchema: z.never(),
@@ -129,11 +108,9 @@ describe("streaming operations", () => {
 				expose: {
 					http: { default: { method: "POST", path: "/stream-http" } },
 				},
-			};
+			});
 
-			const registry = new Map([
-				["test.streamHttp", op],
-			]) as import("../../src/index.js").OperationRegistry<DefaultContext>;
+			const registry = defineRegistry("test", [op]);
 			const handlers = buildHttpHandlers(registry, ctx);
 			const handler = handlers.get("POST /stream-http");
 			if (!handler) throw new Error("Expected handler");
@@ -175,13 +152,7 @@ describe("streaming operations", () => {
 
 	describe("WS surface", () => {
 		test("stream op sends multiple messages (chunk, done)", async () => {
-			const op: Operation<
-				z.ZodObject<{ id: z.ZodString }>,
-				{ id: string },
-				AsyncIterable<Chunk>,
-				string,
-				DefaultContext
-			> = {
+			const op = defineOperation({
 				name: "test.streamWs",
 				schema: z.object({ id: z.string() }),
 				outputSchema: z.never(),
@@ -191,11 +162,9 @@ describe("streaming operations", () => {
 					value: streamChunks(Number.parseInt(p.id, 10) || 2),
 				}),
 				expose: { ws: { default: {} } },
-			};
+			});
 
-			const registry = new Map([
-				["test.streamWs", op],
-			]) as import("../../src/index.js").OperationRegistry<DefaultContext>;
+			const registry = defineRegistry("test", [op]);
 			const sent: unknown[] = [];
 			const connection = {
 				send: (data: unknown) => {
@@ -228,24 +197,16 @@ describe("streaming operations", () => {
 
 	describe("non-stream surfaces skip stream ops", () => {
 		test("job surface skips stream op", () => {
-			const op: Operation<
-				z.ZodObject<{ id: z.ZodString }>,
-				{ id: string },
-				AsyncIterable<Chunk>,
-				string,
-				DefaultContext
-			> = {
+			const op = defineOperation({
 				name: "test.streamJob",
 				schema: z.object({ id: z.string() }),
 				outputSchema: z.never(),
 				outputChunkSchema: chunkSchema,
 				handler: async () => ({ ok: true, value: streamChunks(0) }),
 				expose: { job: { default: { queue: "q", retries: 1 } } },
-			};
+			});
 
-			const registry = new Map([
-				["test.streamJob", op],
-			]) as import("../../src/index.js").OperationRegistry<DefaultContext>;
+			const registry = defineRegistry("test", [op]);
 			const registered: unknown[] = [];
 			const runner = { register: (def: unknown) => registered.push(def) };
 			registerJobOperations(registry, runner, ctx);

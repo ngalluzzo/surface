@@ -95,7 +95,9 @@ export function buildWsHandlers<C extends DefaultContext = DefaultContext>(
 				return;
 			}
 
-			let binding;
+			let binding:
+				| ReturnType<typeof resolveOperationSurfaceBinding>
+				| undefined;
 			try {
 				binding = resolveOperationSurfaceBinding(op, "ws", bindingName);
 			} catch (error) {
@@ -106,8 +108,7 @@ export function buildWsHandlers<C extends DefaultContext = DefaultContext>(
 						phase: "validation",
 						issues: [
 							{
-								message:
-									error instanceof Error ? error.message : String(error),
+								message: error instanceof Error ? error.message : String(error),
 							},
 						],
 					} as ExecutionError,
@@ -134,19 +135,12 @@ export function buildWsHandlers<C extends DefaultContext = DefaultContext>(
 			}
 
 			const ctx = getContext(connection);
-			const result = await execute(
-				op,
-				payload,
-				ctx,
-				"ws",
-				binding.config,
-				{
-					...(hooks ? { hooks } : {}),
-					binding,
-				},
-			);
+			const result = await execute(op, payload, ctx, "ws", binding.config, {
+				...(hooks ? { hooks } : {}),
+				binding,
+			});
 
-			if (!result.ok) {
+			if (result.ok === false) {
 				await sendResponse(connection, {
 					...(id !== undefined && { id }),
 					ok: false,

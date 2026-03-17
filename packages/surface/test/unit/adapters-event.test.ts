@@ -1,9 +1,10 @@
 import { describe, expect, test } from "bun:test";
+import { z } from "zod";
 import {
 	buildEventBindingsFromRegistry,
 	buildEventMapFromRegistry,
-	type DefaultContext,
-	type OperationRegistry,
+	defineOperation,
+	defineRegistry,
 	registerEventConsumers,
 } from "../../src/index.js";
 import { createMockContext } from "../fixtures/context.js";
@@ -72,9 +73,7 @@ describe("registerEventConsumers", () => {
 				},
 			},
 		});
-		const registry = new Map([
-			["test.guardedEvent", op],
-		]) as OperationRegistry<DefaultContext>;
+		const registry = defineRegistry("test", [op]);
 		const { transport, registered } = createMockEventTransport();
 		const ctx = createMockContext();
 		registerEventConsumers(registry, transport, ctx);
@@ -103,9 +102,7 @@ describe("registerEventConsumers", () => {
 				},
 			},
 		});
-		const registry = new Map([
-			["test.failingEvent", op],
-		]) as OperationRegistry<DefaultContext>;
+		const registry = defineRegistry("test", [op]);
 		const { transport, registered } = createMockEventTransport();
 		const ctx = createMockContext();
 		registerEventConsumers(registry, transport, ctx);
@@ -122,7 +119,10 @@ describe("registerEventConsumers", () => {
 describe("buildEventMapFromRegistry", () => {
 	test("returns topic and source for each event-exposed operation", () => {
 		const registry = createRegistryWithMinimalOp();
-		const map = buildEventMapFromRegistry(registry);
+		const map = buildEventMapFromRegistry(registry) as Record<
+			string,
+			{ topic: string; source?: string }
+		>;
 		expect(map["test.echo"]).toEqual({ topic: "test.echo", source: "test" });
 	});
 });
@@ -130,13 +130,50 @@ describe("buildEventMapFromRegistry", () => {
 describe("buildEventBindingsFromRegistry", () => {
 	test("returns structured binding definitions", () => {
 		const registry = createRegistryWithMinimalOp();
-		const bindings = buildEventBindingsFromRegistry(registry);
+		const bindings = buildEventBindingsFromRegistry(registry) as Record<
+			string,
+			unknown
+		>;
 
 		expect(bindings["test.echo"]).toEqual({
 			key: "test.echo",
-			ref: { operation: "test.echo", binding: "default" },
+			ref: { surface: "event", operation: "test.echo", binding: "default" },
 			topic: "test.echo",
 			source: "test",
 		});
+	});
+
+	test("skips stream operations from the standard event binding builder", () => {
+		const op = defineOperation({
+			name: "test.streamEvent",
+			schema: z.object({ id: z.string() }),
+			outputSchema: z.never(),
+			outputChunkSchema: z.object({ value: z.string() }),
+			handler: async () => ({
+				ok: true as const,
+				value: {
+					async *[Symbol.asyncIterator]() {
+						yield { value: "chunk" };
+					},
+				},
+			}),
+			expose: {
+				event: {
+					default: {
+						source: "test",
+						topic: "test.streamEvent",
+						parsePayload: (raw: unknown) => raw,
+					},
+				},
+			},
+		});
+		const registry = defineRegistry("test", [op]);
+		const bindings = buildEventBindingsFromRegistry(registry) as Record<
+			string,
+			unknown
+		>;
+
+		expect(bindings).toEqual({});
+		expect(buildEventMapFromRegistry(registry)).toEqual({});
 	});
 });

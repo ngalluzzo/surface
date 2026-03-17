@@ -15,8 +15,8 @@ describe("executeWithIdempotency", () => {
 		const op = createMinimalOp();
 		const result = await exec(op, { id: "x" }, ctx, "http", undefined);
 		expect(result.ok).toBe(true);
-		if (!result.ok) return;
-		expect(result.value).toEqual({ id: "x" });
+		if (result.ok === false) return;
+		expect((result as { value: unknown }).value).toEqual({ id: "x" });
 	});
 
 	test("when key present, caches successful result and returns it on second call", async () => {
@@ -27,16 +27,16 @@ describe("executeWithIdempotency", () => {
 			idempotencyKey: "key-same",
 		});
 		expect(result1.ok).toBe(true);
-		if (!result1.ok) return;
-		expect(result1.value).toEqual({ id: "a" });
+		if (result1.ok === false) return;
+		expect((result1 as { value: unknown }).value).toEqual({ id: "a" });
 
 		// Second call with same key but different body — should return cached (id: "a")
 		const result2 = await exec(op, { id: "b" }, ctx, "http", undefined, {
 			idempotencyKey: "key-same",
 		});
 		expect(result2.ok).toBe(true);
-		if (!result2.ok) return;
-		expect(result2.value).toEqual({ id: "a" });
+		if (result2.ok === false) return;
+		expect((result2 as { value: unknown }).value).toEqual({ id: "a" });
 	});
 
 	test("when key present and first run fails, does not cache and second run executes again", async () => {
@@ -52,7 +52,7 @@ describe("executeWithIdempotency", () => {
 			idempotencyKey: "key-fail",
 		});
 		expect(result2.ok).toBe(true);
-		if (!result2.ok) return;
-		expect(result2.value).toEqual({ id: "x" });
+		if (result2.ok === false) return;
+		expect((result2 as { value: unknown }).value).toEqual({ id: "x" });
 	});
 });

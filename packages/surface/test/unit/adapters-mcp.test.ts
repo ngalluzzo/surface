@@ -1,9 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import {
-	buildMcpServer,
-	type DefaultContext,
-	type OperationRegistry,
-} from "../../src/index.js";
+import { buildMcpServer, defineRegistry } from "../../src/index.js";
 import { createMockContext } from "../fixtures/context.js";
 import { createMockMcpServer } from "../fixtures/mock-mcp-server.js";
 import { createRegistryWithMinimalOp } from "../fixtures/operations.js";
@@ -62,9 +58,7 @@ describe("buildMcpServer", () => {
 				mcp: { default: { tool: "mcp_handler_fail" } },
 			},
 		});
-		const registry = new Map([
-			["test.mcpHandlerFail", op],
-		]) as OperationRegistry<DefaultContext>;
+		const registry = defineRegistry("test", [op]);
 		const { server, callTool } = createMockMcpServer();
 		const ctx = createMockContext();
 		buildMcpServer(registry, server, ctx);
@@ -97,10 +91,7 @@ describe("buildMcpServer", () => {
 				mcp: { default: { tool: "shared_tool" } },
 			},
 		});
-		const registry = new Map([
-			["test.mcpA", opA],
-			["test.mcpB", opB],
-		]) as OperationRegistry<DefaultContext>;
+		const registry = defineRegistry("test", [opA, opB]);
 		const { server } = createMockMcpServer();
 		const ctx = createMockContext();
 
