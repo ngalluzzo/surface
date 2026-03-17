@@ -3,7 +3,10 @@ import { execute, getHooks } from "../../execution";
 import type { IdempotencyStore } from "../../idempotency";
 import { executeWithIdempotency } from "../../idempotency";
 import type { OperationRegistryWithHooks } from "../../operation";
-import { normalizeSurfaceBindings } from "../../operation";
+import {
+	getSurfaceBindingLookupKey,
+	normalizeSurfaceBindings,
+} from "../../operation";
 import type { DefaultContext, OperationRegistry } from "../../operation/types";
 import type { HttpHandler, HttpRequest } from "./types";
 
@@ -177,8 +180,8 @@ export function buildHttpHandlers<C extends DefaultContext = DefaultContext>(
 }
 
 /**
- * Builds an httpMap (method + path per operation) from a registry for use with createClient.
- * Only includes operations exposed on the http surface.
+ * Builds an httpMap (method + path per binding) from a registry for use with createClient.
+ * Default bindings use the operation name; additional bindings use binding-aware keys.
  */
 export function buildHttpMapFromRegistry<
 	C extends DefaultContext = DefaultContext,
@@ -188,7 +191,7 @@ export function buildHttpMapFromRegistry<
 	const httpBindings = normalizeSurfaceBindings(registry, "http");
 	const map: Record<string, { method: string; path: string }> = {};
 	for (const binding of httpBindings) {
-		map[binding.operationName] = {
+		map[getSurfaceBindingLookupKey(binding)] = {
 			method: binding.config.method,
 			path: binding.config.path,
 		};

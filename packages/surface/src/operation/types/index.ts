@@ -34,6 +34,8 @@ export type {
 	JobSurfaceConfig,
 	McpSurfaceConfig,
 	Surface,
+	SurfaceBindingConfigMap,
+	SurfaceBindings,
 	SurfaceConfigMap,
 	WebhookSurfaceConfig,
 	WsSurfaceConfig,

@@ -47,7 +47,9 @@ export function buildWebhookHandlers<C extends DefaultContext = DefaultContext>(
 		const route = `POST /webhooks/${provider}`;
 
 		handlers.set(route, async (req) => {
-			const byEvent = new Map(bindings.map((binding) => [binding.config.event, binding]));
+			const byEvent = new Map(
+				bindings.map((binding) => [binding.config.event, binding]),
+			);
 
 			const binding = byEvent.get(req.eventType);
 

@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { execute, getHooks } from "../../execution";
 import type { OperationRegistryWithHooks } from "../../operation";
-import { forSurface } from "../../operation";
+import { normalizeSurfaceBindings } from "../../operation";
 import type {
 	DefaultContext,
 	ExecutionError,
@@ -42,13 +42,12 @@ export function buildMcpServer<C extends DefaultContext = DefaultContext>(
 	server: McpServerLike,
 	ctx: C,
 ): void {
-	const mcpOps = forSurface(registry, "mcp");
-	const hooks = getHooks(mcpOps);
+	const mcpBindings = normalizeSurfaceBindings(registry, "mcp");
+	const hooks = "hooks" in registry ? getHooks(registry) : undefined;
 
-	for (const [, op] of mcpOps) {
+	for (const binding of mcpBindings) {
+		const { op, config } = binding;
 		if (op.outputChunkSchema != null) continue;
-		const config = op.expose.mcp;
-		if (!config) throw new Error(`Missing mcp config for ${op.name}`);
 		const inputSchema = z.toJSONSchema(op.schema) as Record<string, unknown>;
 
 		const definition: McpToolDefinition = {

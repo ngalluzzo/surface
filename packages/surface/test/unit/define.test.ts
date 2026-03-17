@@ -7,6 +7,7 @@ import {
 	defineRegistry,
 	forSurface,
 	normalizeOperationSurfaceBindings,
+	resolveOperationSurfaceBinding,
 	normalizeSurfaceBindings,
 } from "../../src/index.js";
 
@@ -27,9 +28,11 @@ function makeOp(
 	surfaces: { http?: boolean; cli?: boolean; job?: boolean },
 ): AnyOperation {
 	const expose: AnyOperation["expose"] = {};
-	if (surfaces.http) expose.http = { method: "POST", path: `/${name}` };
-	if (surfaces.cli) expose.cli = { command: name, description: name };
-	if (surfaces.job) expose.job = { queue: "default" };
+	if (surfaces.http)
+		expose.http = { default: { method: "POST", path: `/${name}` } };
+	if (surfaces.cli)
+		expose.cli = { default: { command: name, description: name } };
+	if (surfaces.job) expose.job = { default: { queue: "default" } };
 	return {
 		name,
 		schema,
@@ -104,7 +107,7 @@ describe("forSurface", () => {
 });
 
 describe("normalizeSurfaceBindings", () => {
-	test("returns one synthetic default binding for each matching operation", () => {
+	test("returns the default binding for each matching operation", () => {
 		const httpOnly = makeOp("test.httpOnly", { http: true });
 		const both = makeOp("test.both", { http: true, cli: true });
 		const reg = defineRegistry("test", [httpOnly, both]);
@@ -132,5 +135,33 @@ describe("normalizeSurfaceBindings", () => {
 	test("returns empty array when the operation is not exposed on that surface", () => {
 		const cliOnly = makeOp("test.cliOnly", { cli: true });
 		expect(normalizeOperationSurfaceBindings(cliOnly, "http")).toEqual([]);
+	});
+
+	test("preserves multiple named bindings for the same operation", () => {
+		const op = {
+			...makeOp("test.multi", { http: true }),
+			expose: {
+				http: {
+					default: { method: "POST" as const, path: "/multi" },
+					admin: { method: "POST" as const, path: "/multi/admin" },
+				},
+			},
+		} satisfies AnyOperation;
+
+		const bindings = normalizeOperationSurfaceBindings(op, "http");
+		expect(bindings.map((binding) => binding.bindingName)).toEqual([
+			"default",
+			"admin",
+		]);
+		expect(bindings.map((binding) => binding.bindingId)).toEqual([
+			"test.multi:default",
+			"test.multi:admin",
+		]);
+		expect(resolveOperationSurfaceBinding(op, "http")?.config.path).toBe(
+			"/multi",
+		);
+		expect(
+			resolveOperationSurfaceBinding(op, "http", "admin")?.config.path,
+		).toBe("/multi/admin");
 	});
 });

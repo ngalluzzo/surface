@@ -63,9 +63,11 @@ describe("registerEventConsumers", () => {
 			handler: async () => ({ ok: true, value: null }),
 			expose: {
 				event: {
-					source: "test",
-					topic: "test.guardedEvent",
-					parsePayload: (raw: unknown) => raw,
+					default: {
+						source: "test",
+						topic: "test.guardedEvent",
+						parsePayload: (raw: unknown) => raw,
+					},
 				},
 			},
 		});
@@ -92,9 +94,11 @@ describe("registerEventConsumers", () => {
 			handler: async () => ({ ok: false, error: "handler_error" }),
 			expose: {
 				event: {
-					source: "test",
-					topic: "test.failingEvent",
-					parsePayload: (raw: unknown) => raw,
+					default: {
+						source: "test",
+						topic: "test.failingEvent",
+						parsePayload: (raw: unknown) => raw,
+					},
 				},
 			},
 		});

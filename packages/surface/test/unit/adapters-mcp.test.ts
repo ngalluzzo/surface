@@ -59,7 +59,7 @@ describe("buildMcpServer", () => {
 			outputSchema: z.null(),
 			handler: async () => ({ ok: false, error: "handler_error" }),
 			expose: {
-				mcp: { tool: "mcp_handler_fail" },
+				mcp: { default: { tool: "mcp_handler_fail" } },
 			},
 		});
 		const registry = new Map([

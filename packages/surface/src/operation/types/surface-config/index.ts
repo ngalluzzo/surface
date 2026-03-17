@@ -20,11 +20,13 @@ export type { McpSurfaceConfig } from "./mcp";
 export type { WebhookSurfaceConfig } from "./webhook";
 export type { WsSurfaceConfig } from "./ws";
 
+export type SurfaceBindings<TConfig> = Record<string, TConfig>;
+
 /**
  * Single source of truth for which surfaces exist and their config types.
  * Adding a surface = add one config interface above + one entry here.
  */
-export interface SurfaceConfigMap<TPayload, C extends DefaultContext> {
+export interface SurfaceBindingConfigMap<TPayload, C extends DefaultContext> {
 	http: HttpSurfaceConfig<TPayload, C>;
 	cli: CliSurfaceConfig<TPayload, C>;
 	job: JobSurfaceConfig<TPayload, C>;
@@ -35,6 +37,12 @@ export interface SurfaceConfigMap<TPayload, C extends DefaultContext> {
 	ws: WsSurfaceConfig<TPayload, C>;
 	graphql: GraphQLSurfaceConfig<TPayload, C>;
 }
+
+export type SurfaceConfigMap<TPayload, C extends DefaultContext> = {
+	[S in keyof SurfaceBindingConfigMap<TPayload, C>]: SurfaceBindings<
+		SurfaceBindingConfigMap<TPayload, C>[S]
+	>;
+};
 
 export type ExposeSurface = keyof SurfaceConfigMap<
 	unknown,

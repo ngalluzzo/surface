@@ -29,7 +29,9 @@ export {
 	defineRegistry,
 	exportSchemas,
 	forSurface,
+	getSurfaceBindingLookupKey,
 	normalizeOperationSurfaceBindings,
+	resolveOperationSurfaceBinding,
 	normalizeSurfaceBindings,
 	registerOperationSchema,
 } from "./operation";
@@ -60,6 +62,8 @@ export type {
 	OperationRegistry,
 	Phase,
 	Surface,
+	SurfaceBindingConfigMap,
+	SurfaceBindings,
 	SurfaceConfigMap,
 	SurfaceContext,
 	SurfaceGuard,

@@ -32,21 +32,25 @@ export function createMinimalOp(): Operation<
 		outputSchema: echoSchema,
 		handler: async (payload: EchoPayload) => ({ ok: true, value: payload }),
 		expose: {
-			http: { method: "POST", path: "/test/echo" },
-			cli: { command: "test echo", description: "Echo test" },
-			job: { queue: "default", retries: 1 },
+			http: { default: { method: "POST", path: "/test/echo" } },
+			cli: { default: { command: "test echo", description: "Echo test" } },
+			job: { default: { queue: "default", retries: 1 } },
 			event: {
-				source: "test",
-				topic: "test.echo",
-				parsePayload: (raw: unknown) => raw,
+				default: {
+					source: "test",
+					topic: "test.echo",
+					parsePayload: (raw: unknown) => raw,
+				},
 			},
 			cron: {
-				schedule: "0 9 * * 1",
-				buildPayload: () => ({ id: "cron-default" }),
+				default: {
+					schedule: "0 9 * * 1",
+					buildPayload: () => ({ id: "cron-default" }),
+				},
 			},
-			mcp: { tool: "test_echo" },
-			ws: {},
-			graphql: { type: "mutation", field: "echo" },
+			mcp: { default: { tool: "test_echo" } },
+			ws: { default: {} },
+			graphql: { default: { type: "mutation", field: "echo" } },
 		},
 	};
 }
@@ -67,7 +71,9 @@ export function createOpWithFailingDomainGuard(): Operation<
 		outputSchema: echoSchema,
 		guards: [assertAlwaysFail],
 		handler: async (payload: EchoPayload) => ({ ok: true, value: payload }),
-		expose: { http: { method: "POST", path: "/test/echoGuarded" } },
+		expose: {
+			http: { default: { method: "POST", path: "/test/echoGuarded" } },
+		},
 	};
 }
 
@@ -90,9 +96,11 @@ export function createOpWithSurfaceGuard(
 		handler: async (payload: EchoPayload) => ({ ok: true, value: payload }),
 		expose: {
 			http: {
-				method: "POST",
-				path: "/test/echoSurfaceGuarded",
-				guards: { prepend: [surfaceGuard] },
+				default: {
+					method: "POST",
+					path: "/test/echoSurfaceGuarded",
+					guards: { prepend: [surfaceGuard] },
+				},
 			},
 		},
 	};
@@ -110,9 +118,11 @@ export const opWithTwoGuards = defineOperation({
 	handler: async (payload: EchoPayload) => ({ ok: true, value: payload }),
 	expose: {
 		http: {
-			method: "POST",
-			path: "/test/twoGuards",
-			guards: { omit: ["assertAlwaysFail"] },
+			default: {
+				method: "POST",
+				path: "/test/twoGuards",
+				guards: { omit: ["assertAlwaysFail"] },
+			},
 		},
 	},
 });
@@ -125,7 +135,7 @@ export const opWithFailingHandler = defineOperation({
 	schema: echoSchema,
 	outputSchema: echoSchema,
 	handler: async () => ({ ok: false, error: "handler_error" }),
-	expose: { http: { method: "POST", path: "/test/failing" } },
+	expose: { http: { default: { method: "POST", path: "/test/failing" } } },
 });
 
 /** Returns a value that fails output schema validation; used for handler output validation tests. */
@@ -146,7 +156,11 @@ export const opWithOutputValidationFailure = defineOperation({
 		ok: true,
 		value: invalidOutputForValidationTest(),
 	}),
-	expose: { http: { method: "POST", path: "/test/outputValidationFailure" } },
+	expose: {
+		http: {
+			default: { method: "POST", path: "/test/outputValidationFailure" },
+		},
+	},
 });
 
 /** Guard policy used to test omit by policy name. */
@@ -166,9 +180,11 @@ export const opWithPolicyOmittedOnHttp = defineOperation({
 	handler: async (payload: EchoPayload) => ({ ok: true, value: payload }),
 	expose: {
 		http: {
-			method: "POST",
-			path: "/test/policyOmitted",
-			guards: { omit: ["testPolicyTwoGuards"] },
+			default: {
+				method: "POST",
+				path: "/test/policyOmitted",
+				guards: { omit: ["testPolicyTwoGuards"] },
+			},
 		},
 	},
 });
@@ -182,7 +198,9 @@ export const opWithPolicyNotOmitted = defineOperation({
 	outputSchema: echoSchema,
 	guards: [policyTwoGuards],
 	handler: async (payload: EchoPayload) => ({ ok: true, value: payload }),
-	expose: { http: { method: "POST", path: "/test/policyNotOmitted" } },
+	expose: {
+		http: { default: { method: "POST", path: "/test/policyNotOmitted" } },
+	},
 });
 
 const outputWithSession = echoSchema.extend({ session: z.string() });
@@ -202,7 +220,9 @@ export const opWithContextEnrichment = defineOperation({
 		ok: true as const,
 		value: { ...payload, session: ctx.session ?? "" },
 	}),
-	expose: { http: { method: "POST", path: "/test/contextEnrichment" } },
+	expose: {
+		http: { default: { method: "POST", path: "/test/contextEnrichment" } },
+	},
 });
 
 /**

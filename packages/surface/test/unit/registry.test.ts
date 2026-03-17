@@ -15,8 +15,8 @@ describe("registerOperationSchema (via defineOperation)", () => {
 			outputSchema,
 			handler: async (p) => ({ ok: true, value: p }),
 			expose: {
-				http: { method: "POST", path: "/registryTest" },
-				job: { queue: "default" },
+				http: { default: { method: "POST", path: "/registryTest" } },
+				job: { default: { queue: "default" } },
 			},
 		});
 		expect(op.name).toBe("registryTest.registered");

@@ -2,7 +2,10 @@ import { execute, getHooks } from "../../execution";
 import type { IdempotencyStore } from "../../idempotency";
 import { executeWithIdempotency } from "../../idempotency";
 import type { OperationRegistryWithHooks } from "../../operation";
-import { forSurface } from "../../operation";
+import {
+	getSurfaceBindingLookupKey,
+	normalizeSurfaceBindings,
+} from "../../operation";
 import type { DefaultContext, OperationRegistry } from "../../operation/types";
 import { parseRaw } from "../shared/parse-raw";
 import type { EventConsumerDefinition, EventTransportLike } from "./types";
@@ -26,8 +29,8 @@ export function registerEventConsumers<
 	ctx: C,
 	options?: RegisterEventConsumersOptions<C>,
 ): void {
-	const eventOps = forSurface(registry, "event");
-	const hooks = getHooks(eventOps);
+	const eventBindings = normalizeSurfaceBindings(registry, "event");
+	const hooks = "hooks" in registry ? getHooks(registry) : undefined;
 	const idempotencyStore = options?.idempotencyStore;
 	const idempotencyTtlMs = options?.idempotencyTtlMs;
 	const useIdempotency =
@@ -39,13 +42,12 @@ export function registerEventConsumers<
 			? executeWithIdempotency(idempotencyStore, idempotencyTtlMs)
 			: execute;
 
-	for (const [, op] of eventOps) {
+	for (const binding of eventBindings) {
+		const { op, config } = binding;
 		if (op.outputChunkSchema != null) continue;
-		const config = op.expose.event;
-		if (!config) throw new Error(`Missing event config for ${op.name}`);
 
 		const definition: EventConsumerDefinition = {
-			name: op.name,
+			name: getSurfaceBindingLookupKey(binding),
 			topic: config.topic,
 			source: config.source,
 			parsePayload: config.parsePayload,
@@ -94,22 +96,20 @@ export function registerEventConsumers<
 }
 
 /**
- * Builds an eventMap (topic + optional source per operation) from a registry for use with createEventClient.
- * Only includes operations exposed on the event surface.
+ * Builds an eventMap (topic + optional source per binding) from a registry for use with createEventClient.
+ * Default bindings use the operation name; additional bindings use binding-aware keys.
  */
 export function buildEventMapFromRegistry<
 	C extends DefaultContext = DefaultContext,
 >(
 	registry: OperationRegistry<C> | OperationRegistryWithHooks<C>,
 ): Record<string, { topic: string; source?: string }> {
-	const eventOps = forSurface(registry, "event");
+	const eventBindings = normalizeSurfaceBindings(registry, "event");
 	const map: Record<string, { topic: string; source?: string }> = {};
-	for (const [, op] of eventOps) {
-		const config = op.expose.event;
-		if (!config) continue;
-		map[op.name] = {
-			topic: config.topic,
-			...(config.source && { source: config.source }),
+	for (const binding of eventBindings) {
+		map[getSurfaceBindingLookupKey(binding)] = {
+			topic: binding.config.topic,
+			...(binding.config.source && { source: binding.config.source }),
 		};
 	}
 	return map;

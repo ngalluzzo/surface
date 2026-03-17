@@ -1,6 +1,9 @@
 import { execute, getHooks } from "../../execution";
 import type { OperationRegistryWithHooks } from "../../operation";
-import { forSurface } from "../../operation";
+import {
+	getSurfaceBindingLookupKey,
+	normalizeSurfaceBindings,
+} from "../../operation";
 import type { DefaultContext, OperationRegistry } from "../../operation/types";
 import type { CronDefinitionLike, CronSchedulerLike } from "./types";
 import { NonRetryableError } from "./types";
@@ -19,16 +22,15 @@ export function registerCronOperations<
 	scheduler: CronSchedulerLike,
 	ctx: C,
 ): void {
-	const cronOps = forSurface(registry, "cron");
-	const hooks = getHooks(cronOps);
+	const cronBindings = normalizeSurfaceBindings(registry, "cron");
+	const hooks = "hooks" in registry ? getHooks(registry) : undefined;
 
-	for (const [, op] of cronOps) {
+	for (const binding of cronBindings) {
+		const { op, config } = binding;
 		if (op.outputChunkSchema != null) continue;
-		const config = op.expose.cron;
-		if (!config) throw new Error(`Missing cron config for ${op.name}`);
 
 		const definition: CronDefinitionLike = {
-			name: op.name,
+			name: getSurfaceBindingLookupKey(binding),
 			schedule: config.schedule,
 			...(config.timeout !== undefined && {
 				options: { timeout: config.timeout },

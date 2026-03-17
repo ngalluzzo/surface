@@ -5,7 +5,7 @@ import type {
 	ExecutionMeta,
 	Operation,
 } from "../../src/index.js";
-import { execute } from "../../src/index.js";
+import { execute, resolveOperationSurfaceBinding } from "../../src/index.js";
 import type { ZodType } from "zod";
 import { createMockContext } from "../fixtures/context.js";
 import { surfaceGuardFail } from "../fixtures/guards.js";
@@ -31,7 +31,15 @@ const executeOnHttp = <
 	op: Operation<ZodType, TPayload, TOutput, TError, C>,
 	raw: unknown,
 	options?: Parameters<typeof execute>[5],
-) => execute(op, raw, ctx as C, "http", op.expose.http, options);
+) =>
+	execute(
+		op,
+		raw,
+		ctx as C,
+		"http",
+		resolveOperationSurfaceBinding(op, "http")?.config,
+		options,
+	);
 
 describe("execute", () => {
 	describe("happy path", () => {
@@ -275,9 +283,11 @@ describe("execute", () => {
 				expose: {
 					...createMinimalOp().expose,
 					http: {
-						method: "POST" as const,
-						path: "/test/slow",
-						timeout: 50,
+						default: {
+							method: "POST" as const,
+							path: "/test/slow",
+							timeout: 50,
+						},
 					},
 				},
 				handler: async (payload: { id: string }) => {
@@ -300,9 +310,11 @@ describe("execute", () => {
 				expose: {
 					...createMinimalOp().expose,
 					http: {
-						method: "POST" as const,
-						path: "/test/fast",
-						timeout: 500,
+						default: {
+							method: "POST" as const,
+							path: "/test/fast",
+							timeout: 500,
+						},
 					},
 				},
 			};

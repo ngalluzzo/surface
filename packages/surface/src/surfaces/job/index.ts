@@ -1,6 +1,9 @@
 import { execute, getHooks } from "../../execution";
 import type { OperationRegistryWithHooks } from "../../operation";
-import { forSurface } from "../../operation";
+import {
+	getSurfaceBindingLookupKey,
+	normalizeSurfaceBindings,
+} from "../../operation";
 import type { DefaultContext, OperationRegistry } from "../../operation/types";
 import type { JobDefinitionLike, JobRunnerLike } from "./types";
 import { NonRetryableError } from "./types";
@@ -19,16 +22,15 @@ export function registerJobOperations<
 	runner: JobRunnerLike,
 	ctx: C,
 ): void {
-	const jobOps = forSurface(registry, "job");
-	const hooks = getHooks(jobOps);
+	const jobBindings = normalizeSurfaceBindings(registry, "job");
+	const hooks = "hooks" in registry ? getHooks(registry) : undefined;
 
-	for (const [, op] of jobOps) {
+	for (const binding of jobBindings) {
+		const { op, config } = binding;
 		if (op.outputChunkSchema != null) continue;
-		const config = op.expose.job;
-		if (!config) throw new Error(`Missing job config for ${op.name}`);
 
 		const definition: JobDefinitionLike<unknown> = {
-			name: op.name,
+			name: getSurfaceBindingLookupKey(binding),
 			schema: op.schema,
 			...(config.idempotencyKey && {
 				idempotencyKey: config.idempotencyKey as (

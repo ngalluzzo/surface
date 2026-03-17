@@ -34,36 +34,52 @@ export const registerOperation = defineOperation({
 
   expose: {
     http: {
-      method: "POST",
-      path: "/registrations",
-      guards: { prepend: [requireSession] },
+      default: {
+        method: "POST",
+        path: "/registrations",
+        guards: { prepend: [requireSession] },
+      },
     },
     cli: {
-      command: "registrations register",
-      guards: { omit: ["assertNotAlreadyRegistered"] },
+      default: {
+        command: "registrations register",
+        guards: { omit: ["assertNotAlreadyRegistered"] },
+      },
     },
     job: {
-      queue: "default",
-      retries: 3,
-      idempotencyKey: (p) => `register:${p.personId}:${p.eventId}`,
+      default: {
+        queue: "default",
+        retries: 3,
+        idempotencyKey: (p) => `register:${p.personId}:${p.eventId}`,
+      },
     },
     cron: {
-      schedule: "0 9 * * 1",
-      buildPayload: (ctx) => ctx.db.getPendingRegistrations(),
+      default: {
+        schedule: "0 9 * * 1",
+        buildPayload: (ctx) => ctx.db.getPendingRegistrations(),
+      },
     },
     event: {
-      source: "sqs",
-      topic: "registrations.requested",
-      parsePayload: (e) => e.body,
+      default: {
+        source: "sqs",
+        topic: "registrations.requested",
+        parsePayload: (e) => e.body,
+      },
     },
     webhook: {
-      provider: "stripe",
-      event: "checkout.session.completed",
-      guards: { prepend: [stripeSignatureGuard] },
-      parsePayload: (e) => e.data.object,
+      stripe: {
+        provider: "stripe",
+        event: "checkout.session.completed",
+        guards: { prepend: [stripeSignatureGuard] },
+        parsePayload: (e) => e.data.object,
+      },
     },
-    graphql: { type: "mutation", field: "registerForEvent" },
-    mcp: { tool: "register_for_event" },
+    graphql: {
+      default: { type: "mutation", field: "registerForEvent" },
+    },
+    mcp: {
+      default: { tool: "register_for_event" },
+    },
   },
 });
 ```
@@ -80,7 +96,7 @@ Most backend operations need to be callable from more than one place. A registra
 
 ## Core concepts
 
-**Operation** — a name, a Zod input schema, an output schema, domain guards, a handler, and per-surface config. The complete definition of a thing your system can do.
+**Operation** — a name, a Zod input schema, an output schema, domain guards, a handler, and named bindings for each surface. The complete definition of a thing your system can do.
 
 **Registry** — a named collection of operations for one domain. Composed into a root registry at startup.
 
@@ -190,8 +206,12 @@ guards: [adminOnly, assertEventHasCapacity],
 
 // Per-surface: omit the whole policy on trusted surfaces (e.g. CLI)
 expose: {
-  http: { method: "POST", path: "/admin/thing" },
-  cli:  { command: "admin thing", guards: { omit: ["adminOnly"] } },
+  http: {
+    default: { method: "POST", path: "/admin/thing" },
+  },
+  cli: {
+    default: { command: "admin thing", guards: { omit: ["adminOnly"] } },
+  },
 }
 ```
 
@@ -300,9 +320,11 @@ Operations with a `cron` surface config have no inbound payload. Instead, `build
 ```ts
 expose: {
   cron: {
-    schedule: "0 9 * * 1",
-    buildPayload: (ctx) => ctx.db.getPendingRegistrations(),
-    timeout: 60_000,
+    default: {
+      schedule: "0 9 * * 1",
+      buildPayload: (ctx) => ctx.db.getPendingRegistrations(),
+      timeout: 60_000,
+    },
   },
 }
 ```
@@ -314,9 +336,11 @@ React to messages from SQS, Kafka, EventBridge, or any pluggable transport. `par
 ```ts
 expose: {
   event: {
-    source:       "sqs",
-    topic:        "registrations.requested",
-    parsePayload: (message) => JSON.parse(message.body),
+    default: {
+      source:       "sqs",
+      topic:        "registrations.requested",
+      parsePayload: (message) => JSON.parse(message.body),
+    },
   },
 }
 ```
@@ -337,13 +361,15 @@ One route per provider, fan-out to operations by event type internally. Always r
 ```ts
 expose: {
   webhook: {
-    provider:     "stripe",
-    event:        "payment_intent.succeeded",
-    guards:       { prepend: [stripeSignatureGuard] },
-    parsePayload: (raw) => ({
-      paymentIntentId: raw.data.object.id,
-      amount:          raw.data.object.amount,
-    }),
+    stripe: {
+      provider:     "stripe",
+      event:        "payment_intent.succeeded",
+      guards:       { prepend: [stripeSignatureGuard] },
+      parsePayload: (raw) => ({
+        paymentIntentId: raw.data.object.id,
+        amount:          raw.data.object.amount,
+      }),
+    },
   },
 }
 ```
@@ -370,11 +396,19 @@ Supported Zod shapes for input/output: `z.object`, `z.array`, `z.string()`, `z.n
 ```ts
 expose: {
   graphql: {
-    type:  "mutation",
-    field: "registerForEvent",
+    default: {
+      type:  "mutation",
+      field: "registerForEvent",
+    },
+    admin: {
+      type:  "mutation",
+      field: "registerForEventAdmin",
+    },
   },
 }
 ```
+
+For GraphQL, non-default bindings should currently set an explicit `field`. GraphQL field names must be valid GraphQL identifiers, while generic binding lookup keys may include characters like `:`.
 
 ### MCP — `buildMcpServer`
 
@@ -391,9 +425,11 @@ server.run(); // or server.listen({ port: 3001 }) per your SDK
 ```ts
 expose: {
   mcp: {
-    tool: "register_for_event",
-    // description inherited from operation description
-    // input schema derived from operation schema
+    default: {
+      tool: "register_for_event",
+      // description inherited from operation description
+      // input schema derived from operation schema
+    },
   },
 }
 ```
@@ -431,10 +467,13 @@ server.on("connection", (socket) => {
 ```ts
 expose: {
   ws: {
+    default: {},
   }
 }
-// or ws: { messageKey: "operation" } to use a different message key
 ```
+
+When an operation has more than one WS binding, clients can include `binding` in the inbound message:
+`{ op, binding, payload, id }`.
 
 ---
 
@@ -469,6 +508,10 @@ type AppRegistry = {
 ```
 
 Use this type with all clients below. The server builds runtime maps (method+path, topic, etc.) from the same registry; the client stays in sync via types.
+
+When a surface has multiple bindings for the same operation, generated runtime maps use:
+- the operation name for the `default` binding
+- `operationName:bindingName` for additional bindings
 
 ### HTTP client — `@gooios/surface/client`
 
@@ -505,6 +548,8 @@ if (result.ok) {
 ```
 
 Use in server-side callers, CLI scripts, tests, or any non-React context. No React or TanStack Query required.
+
+If an operation exposes multiple HTTP bindings, the additional entries in `httpMap` are keyed as `operationName:bindingName`.
 
 ### Job client — `@gooios/surface/job-client`
 
@@ -565,6 +610,8 @@ await events.publish("registrations.requested", {
 ```
 
 Fire-and-forget; no return value.
+
+If an operation exposes multiple event bindings, the additional entries in `eventMap` are keyed as `operationName:bindingName`.
 
 ### React Query — `@gooios/surface/client/react`
 
@@ -661,7 +708,10 @@ const streamOp = defineOperation({
     }
     return { ok: true, value: run() };
   },
-  expose: { http: { method: "POST", path: "/search/stream" }, ws: {} },
+  expose: {
+    http: { default: { method: "POST", path: "/search/stream" } },
+    ws: { default: {} },
+  },
 });
 ```
 

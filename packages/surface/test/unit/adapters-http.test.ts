@@ -88,9 +88,11 @@ describe("buildHttpHandlers", () => {
 			expose: {
 				...createMinimalOp().expose,
 				http: {
-					method: "POST" as const,
-					path: "/test/slow",
-					timeout: 50,
+					default: {
+						method: "POST" as const,
+						path: "/test/slow",
+						timeout: 50,
+					},
 				},
 			},
 			handler: async (payload: { id: string }) => {
@@ -183,6 +185,58 @@ describe("buildHttpHandlers", () => {
 		expect(res2.body).toEqual({ id: "first" });
 		expect(runs).toBe(1);
 	});
+
+	test("same operation can expose multiple http bindings", async () => {
+		const op = {
+			...createMinimalOp(),
+			expose: {
+				http: {
+					default: { method: "POST" as const, path: "/test/echo" },
+					admin: { method: "POST" as const, path: "/test/echo/admin" },
+				},
+			},
+		};
+		const registry = new Map<string, AnyOperation<DefaultContext>>();
+		registry.set(op.name, op as AnyOperation<DefaultContext>);
+
+		const handlers = buildHttpHandlers(registry, ctx);
+		expect(handlers.has("POST /test/echo")).toBe(true);
+		expect(handlers.has("POST /test/echo/admin")).toBe(true);
+
+		const defaultHandler = handlers.get("POST /test/echo");
+		const adminHandler = handlers.get("POST /test/echo/admin");
+		if (!defaultHandler || !adminHandler) {
+			throw new Error("Expected both http handlers");
+		}
+
+		const defaultResponse = await defaultHandler(
+			{
+				method: "POST",
+				path: "/test/echo",
+				body: { id: "default-route" },
+				headers: {},
+			},
+			ctx,
+		);
+		const adminResponse = await adminHandler(
+			{
+				method: "POST",
+				path: "/test/echo/admin",
+				body: { id: "admin-route" },
+				headers: {},
+			},
+			ctx,
+		);
+
+		expect(defaultResponse).toEqual({
+			status: 200,
+			body: { id: "default-route" },
+		});
+		expect(adminResponse).toEqual({
+			status: 200,
+			body: { id: "admin-route" },
+		});
+	});
 });
 
 describe("buildHttpMapFromRegistry", () => {
@@ -190,5 +244,26 @@ describe("buildHttpMapFromRegistry", () => {
 		const registry = createRegistryWithMinimalOp();
 		const map = buildHttpMapFromRegistry(registry);
 		expect(map["test.echo"]).toEqual({ method: "POST", path: "/test/echo" });
+	});
+
+	test("uses binding-aware keys for additional bindings", () => {
+		const op = {
+			...createMinimalOp(),
+			expose: {
+				http: {
+					default: { method: "POST" as const, path: "/test/echo" },
+					admin: { method: "POST" as const, path: "/test/echo/admin" },
+				},
+			},
+		};
+		const registry = new Map<string, AnyOperation<DefaultContext>>();
+		registry.set(op.name, op as AnyOperation<DefaultContext>);
+
+		const map = buildHttpMapFromRegistry(registry);
+		expect(map["test.echo"]).toEqual({ method: "POST", path: "/test/echo" });
+		expect(map["test.echo:admin"]).toEqual({
+			method: "POST",
+			path: "/test/echo/admin",
+		});
 	});
 });

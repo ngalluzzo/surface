@@ -1,7 +1,6 @@
 import type {
 	DefaultContext,
 	ExecutionError,
-	ExposeSurface,
 	Stage,
 } from "../../operation/types";
 import { resolveDomainGuards } from "../resolve-guards";
@@ -16,7 +15,7 @@ export function makeDomainGuardStage<
 	C extends DefaultContext,
 >(): Stage<TPayload, TOutput, TError, C> {
 	return async (state) => {
-		const { op, payload, context, surface } = state;
+		const { op, payload, context, surfaceConfig } = state;
 		if (payload === undefined) {
 			return {
 				ok: false,
@@ -26,7 +25,6 @@ export function makeDomainGuardStage<
 				} satisfies ExecutionError,
 			};
 		}
-		const surfaceConfig = op.expose[surface as ExposeSurface];
 		const entries = resolveDomainGuards(op.guards ?? [], surfaceConfig?.guards);
 		let ctx: C = context;
 

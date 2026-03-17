@@ -2,7 +2,7 @@ import { parseArgs } from "node:util";
 import { z } from "zod/v4";
 import { execute, getHooks } from "../../execution";
 import type { OperationRegistryWithHooks } from "../../operation";
-import { forSurface } from "../../operation";
+import { normalizeSurfaceBindings } from "../../operation";
 import type { DefaultContext, OperationRegistry } from "../../operation/types";
 import type { SchemaRegistryZodRegistry } from "../../registry/schema-registry";
 import { defaultRegistry } from "../../registry/schema-registry";
@@ -16,25 +16,23 @@ export async function runCli<C extends DefaultContext = DefaultContext>(
 	argv: string[],
 	options?: RunCliOptions,
 ): Promise<void> {
-	const cliOps = forSurface(registry, "cli");
-	const cliOpsNonStream = new Map(
-		[...cliOps].filter(([, o]) => o.outputChunkSchema == null),
+	const cliBindings = normalizeSurfaceBindings(registry, "cli").filter(
+		(binding) => binding.op.outputChunkSchema == null,
 	);
-	const hooks = getHooks(cliOps);
+	const hooks = "hooks" in registry ? getHooks(registry) : undefined;
 	const [command, ...rest] = argv;
 
-	const op = [...cliOpsNonStream.values()].find(
-		(o) => o.expose.cli?.command === command,
+	const binding = cliBindings.find(
+		(candidate) => candidate.config.command === command,
 	);
 
-	if (!op) {
+	if (!binding) {
 		console.error(`Unknown command: ${command}\n`);
-		printHelp(cliOpsNonStream);
+		printHelp(cliBindings);
 		process.exit(1);
 	}
 
-	const config = op.expose.cli;
-	if (!config) throw new Error(`Missing cli config for ${op.name}`);
+	const { op, config } = binding;
 	const registryForSchema =
 		options?.schemaRegistry?.registry ?? defaultRegistry;
 
@@ -117,13 +115,11 @@ export async function runCli<C extends DefaultContext = DefaultContext>(
 }
 
 const printHelp = <C extends DefaultContext>(
-	ops: OperationRegistry<C>,
+	bindings: ReturnType<typeof normalizeSurfaceBindings<"cli", C>>,
 ): void => {
 	console.log("Available commands:\n");
-	for (const [, op] of ops) {
-		const cfg = op.expose.cli;
-		if (!cfg) continue;
-		const { command, description } = cfg;
+	for (const binding of bindings) {
+		const { command, description } = binding.config;
 		console.log(`  ${command.padEnd(40)} ${description ?? ""}`);
 	}
 };

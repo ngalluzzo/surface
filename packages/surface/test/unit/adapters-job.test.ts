@@ -50,7 +50,7 @@ describe("registerJobOperations", () => {
 			outputSchema: z.null(),
 			guards: [assertAlwaysFail],
 			handler: async () => ({ ok: true, value: null }),
-			expose: { job: { queue: "q", retries: 2 } },
+			expose: { job: { default: { queue: "q", retries: 2 } } },
 		});
 		const registry = new Map([
 			["test.guardedJob", op],
@@ -75,8 +75,10 @@ describe("registerJobOperations", () => {
 			handler: async () => ({ ok: true, value: null }),
 			expose: {
 				job: {
-					queue: "default",
-					idempotencyKey: (p) => `reg:${p.personId}:${p.eventId}`,
+					default: {
+						queue: "default",
+						idempotencyKey: (p) => `reg:${p.personId}:${p.eventId}`,
+					},
 				},
 			},
 		});

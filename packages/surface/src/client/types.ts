@@ -25,7 +25,7 @@ export type HttpMap<R extends RegistryContract> = {
 };
 
 /**
- * Options for createClient. httpMap provides method/path per operation at runtime.
+ * Options for createClient. httpMap provides method/path per binding key at runtime.
  */
 export interface CreateClientOptions<R extends RegistryContract> {
 	baseUrl: string;
@@ -36,7 +36,7 @@ export interface CreateClientOptions<R extends RegistryContract> {
 }
 
 /**
- * Return type of createClient: one async function per operation, returning Result<Output, ExecutionError>.
+ * Return type of createClient: one async function per binding key, returning Result<Output, ExecutionError>.
  */
 export type ClientMap<R extends RegistryContract> = {
 	[K in keyof R]: (

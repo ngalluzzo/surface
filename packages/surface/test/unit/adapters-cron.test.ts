@@ -50,8 +50,10 @@ describe("registerCronOperations", () => {
 			handler: async () => ({ ok: true, value: null }),
 			expose: {
 				cron: {
-					schedule: "* * * * *",
-					buildPayload: invalidCronPayloadForTest,
+					default: {
+						schedule: "* * * * *",
+						buildPayload: invalidCronPayloadForTest,
+					},
 				},
 			},
 		});
@@ -80,8 +82,10 @@ describe("registerCronOperations", () => {
 			handler: async () => ({ ok: true, value: null }),
 			expose: {
 				cron: {
-					schedule: "* * * * *",
-					buildPayload: () => ({ x: 1 }),
+					default: {
+						schedule: "* * * * *",
+						buildPayload: () => ({ x: 1 }),
+					},
 				},
 			},
 		});
@@ -106,8 +110,10 @@ describe("registerCronOperations", () => {
 			handler: async () => ({ ok: false, error: "handler_error" }),
 			expose: {
 				cron: {
-					schedule: "* * * * *",
-					buildPayload: () => ({ id: "x" }),
+					default: {
+						schedule: "* * * * *",
+						buildPayload: () => ({ id: "x" }),
+					},
 				},
 			},
 		});
@@ -133,8 +139,10 @@ describe("registerCronOperations", () => {
 			handler: async () => ({ ok: true, value: null }),
 			expose: {
 				cron: {
-					schedule: "* * * * *",
-					buildPayload: async () => ({ id: "async-1" }),
+					default: {
+						schedule: "* * * * *",
+						buildPayload: async () => ({ id: "async-1" }),
+					},
 				},
 			},
 		});

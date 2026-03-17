@@ -4,7 +4,8 @@ import {
 	composeRegistries,
 	defineRegistry,
 	forSurface,
-} from "../registry/define-registry";
+	resolveOperationSurfaceBinding,
+} from "../registry";
 import { registerOperationSchema } from "../registry/schema-registry";
 import type {
 	AnyOperation,
@@ -49,11 +50,12 @@ export function createOps<C extends DefaultContext = DefaultContext>(
 		registry: OperationRegistry<C>,
 		surface: ExposeSurface,
 	) => OperationRegistry<C>;
-		execute: (
-			op: AnyOperation<C>,
-			raw: unknown,
-			ctx: C,
-			surface: ExposeSurface,
+	execute: (
+		op: AnyOperation<C>,
+		raw: unknown,
+		ctx: C,
+		surface: ExposeSurface,
+		bindingName?: string,
 	) => Promise<
 		{ ok: true; value: unknown } | { ok: false; error: ExecutionError }
 	>;
@@ -89,13 +91,19 @@ export function createOps<C extends DefaultContext = DefaultContext>(
 		): OperationRegistry<C> {
 			return forSurface<C>(registry, surface);
 		},
-		execute(op, raw, ctx, surface) {
+		execute(op, raw, ctx, surface, bindingName) {
+			const binding = resolveOperationSurfaceBinding(op, surface, bindingName);
+			if (!binding) {
+				throw new Error(
+					`Operation "${op.name}" is not exposed on the ${surface} surface`,
+				);
+			}
 			return execute(
 				op,
 				raw,
 				ctx,
 				surface,
-				op.expose[surface],
+				binding.config,
 				hooks ? { hooks } : undefined,
 			);
 		},

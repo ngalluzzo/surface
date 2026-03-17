@@ -11,12 +11,15 @@ import {
 } from "graphql";
 import { execute, getHooks } from "../../execution";
 import type { OperationRegistryWithHooks } from "../../operation";
+import {
+	getSurfaceBindingLookupKey,
+	normalizeSurfaceBindings,
+} from "../../operation";
 import type {
 	DefaultContext,
 	ExecutionError,
 	OperationRegistry,
 } from "../../operation/types";
-import { forSurface } from "../../registry";
 
 function executionErrorToGraphQLError(error: ExecutionError): GraphQLError {
 	let message: string;
@@ -64,47 +67,62 @@ export async function buildGraphQLSchema<
 	registry: OperationRegistry<C> | OperationRegistryWithHooks<C>,
 	ctx: C,
 ): Promise<GraphQLSchema> {
-	const graphqlOps = forSurface(registry, "graphql");
-	const hooks = getHooks(graphqlOps);
+	const graphqlBindings = normalizeSurfaceBindings(registry, "graphql");
+	const hooks = "hooks" in registry ? getHooks(registry) : undefined;
+	const typesByOperation = new Map<
+		string,
+		{
+			inputType: GraphQLInputType;
+			outputType: GraphQLOutputType;
+		}
+	>();
 
 	const mutationFields: Record<string, GraphQLFieldConfig<unknown, C>> = {};
 	const queryFields: Record<string, GraphQLFieldConfig<unknown, C>> = {};
 
-	for (const [, op] of graphqlOps) {
+	for (const binding of graphqlBindings) {
+		const { op, config } = binding;
 		if (op.outputChunkSchema != null) continue;
-		const config = op.expose.graphql;
-		const fieldName = config?.field ?? op.name;
-		const kind = config?.type ?? "mutation";
+		const fieldName = config.field ?? getSurfaceBindingLookupKey(binding);
+		const kind = config.type ?? "mutation";
 
-		const inputResult = await convertZodToGraphQL(op.schema, {
-			rootName: `${op.name}_Input`,
-			mode: "input",
-		});
-		if (inputResult.kind === "err") {
-			const err = inputResult.error;
-			const msg =
-				err && typeof err === "object" && "message" in err
-					? (err as { message: string }).message
-					: String(err);
-			throw new Error(`GraphQL input type for ${op.name}: ${msg}`);
+		let types = typesByOperation.get(op.name);
+		if (!types) {
+			const inputResult = await convertZodToGraphQL(op.schema, {
+				rootName: `${op.name}_Input`,
+				mode: "input",
+			});
+			if (inputResult.kind === "err") {
+				const err = inputResult.error;
+				const msg =
+					err && typeof err === "object" && "message" in err
+						? (err as { message: string }).message
+						: String(err);
+				throw new Error(`GraphQL input type for ${op.name}: ${msg}`);
+			}
+
+			const outputResult = await convertZodToGraphQL(op.outputSchema, {
+				rootName: `${op.name}_Output`,
+				mode: "output",
+			});
+			if (outputResult.kind === "err") {
+				const err = outputResult.error;
+				const msg =
+					err && typeof err === "object" && "message" in err
+						? (err as { message: string }).message
+						: String(err);
+				throw new Error(`GraphQL output type for ${op.name}: ${msg}`);
+			}
+
+			types = {
+				inputType: inputResult.value.rootType as GraphQLInputType,
+				outputType: outputResult.value.rootType as GraphQLOutputType,
+			};
+			typesByOperation.set(op.name, types);
 		}
 
-		const outputResult = await convertZodToGraphQL(op.outputSchema, {
-			rootName: `${op.name}_Output`,
-			mode: "output",
-		});
-		if (outputResult.kind === "err") {
-			const err = outputResult.error;
-			const msg =
-				err && typeof err === "object" && "message" in err
-					? (err as { message: string }).message
-					: String(err);
-			throw new Error(`GraphQL output type for ${op.name}: ${msg}`);
-		}
-
-		const inputType = inputResult.value.rootType as GraphQLInputType;
 		const args = {
-			input: { type: new GraphQLNonNull(inputType) },
+			input: { type: new GraphQLNonNull(types.inputType) },
 		};
 
 		const resolve = async (_source: unknown, argsInput: unknown) => {
@@ -123,9 +141,8 @@ export async function buildGraphQLSchema<
 			return result.value;
 		};
 
-		const outputType = outputResult.value.rootType as GraphQLOutputType;
 		const fieldConfig: GraphQLFieldConfig<unknown, C> = {
-			type: new GraphQLNonNull(outputType),
+			type: new GraphQLNonNull(types.outputType),
 			args,
 			resolve,
 		};

@@ -1,6 +1,6 @@
 import { execute, getHooks } from "../../execution";
 import type { OperationRegistryWithHooks } from "../../operation";
-import { forSurface } from "../../operation";
+import { resolveOperationSurfaceBinding } from "../../operation";
 import type {
 	DefaultContext,
 	ExecutionError,
@@ -34,8 +34,7 @@ export function buildWsHandlers<C extends DefaultContext = DefaultContext>(
 	getContext: (connection: WsConnectionLike) => C,
 	options?: BuildWsHandlersOptions,
 ): WsHandlers<C> {
-	const wsOps = forSurface(registry, "ws");
-	const hooks = getHooks(wsOps);
+	const hooks = "hooks" in registry ? getHooks(registry) : undefined;
 	const messageKey = options?.messageKey ?? "op";
 
 	async function sendResponse(
@@ -60,6 +59,10 @@ export function buildWsHandlers<C extends DefaultContext = DefaultContext>(
 					? (raw[messageKey] as string)
 					: undefined;
 			const payload = raw && "payload" in raw ? raw.payload : undefined;
+			const bindingName =
+				raw && "binding" in raw && typeof raw.binding === "string"
+					? raw.binding
+					: undefined;
 			const id: string | number | undefined =
 				raw &&
 				"id" in raw &&
@@ -79,7 +82,7 @@ export function buildWsHandlers<C extends DefaultContext = DefaultContext>(
 				return;
 			}
 
-			const op = wsOps.get(opName);
+			const op = registry.get(opName);
 			if (!op) {
 				await sendResponse(connection, {
 					...(id !== undefined && { id }),
@@ -92,13 +95,51 @@ export function buildWsHandlers<C extends DefaultContext = DefaultContext>(
 				return;
 			}
 
+			let binding;
+			try {
+				binding = resolveOperationSurfaceBinding(op, "ws", bindingName);
+			} catch (error) {
+				await sendResponse(connection, {
+					...(id !== undefined && { id }),
+					ok: false,
+					error: {
+						phase: "validation",
+						issues: [
+							{
+								message:
+									error instanceof Error ? error.message : String(error),
+							},
+						],
+					} as ExecutionError,
+				});
+				return;
+			}
+			if (!binding) {
+				await sendResponse(connection, {
+					...(id !== undefined && { id }),
+					ok: false,
+					error: {
+						phase: "validation",
+						issues: [
+							{
+								message:
+									bindingName !== undefined
+										? `Unknown ws binding "${bindingName}" for operation: ${opName}`
+										: `Operation "${opName}" is not exposed on ws`,
+							},
+						],
+					} as ExecutionError,
+				});
+				return;
+			}
+
 			const ctx = getContext(connection);
 			const result = await execute(
 				op,
 				payload,
 				ctx,
 				"ws",
-				op.expose.ws,
+				binding.config,
 				hooks ? { hooks } : undefined,
 			);
 

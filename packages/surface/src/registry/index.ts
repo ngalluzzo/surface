@@ -6,7 +6,9 @@ export {
 } from "./define-registry";
 export type { NormalizedSurfaceBinding } from "./normalize-surface-bindings";
 export {
+	getSurfaceBindingLookupKey,
 	normalizeOperationSurfaceBindings,
+	resolveOperationSurfaceBinding,
 	normalizeSurfaceBindings,
 } from "./normalize-surface-bindings";
 export type {

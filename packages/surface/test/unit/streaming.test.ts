@@ -6,6 +6,7 @@ import {
 	buildWsHandlers,
 	execute,
 	registerJobOperations,
+	resolveOperationSurfaceBinding,
 } from "../../src/index.js";
 import { createMockContext } from "../fixtures/context.js";
 
@@ -19,7 +20,15 @@ const executeOnHttp = <
 	op: Operation<z.ZodType, TPayload, TOutput, TError, C>,
 	raw: unknown,
 	options?: Parameters<typeof execute>[5],
-) => execute(op, raw, ctx as C, "http", op.expose.http, options);
+) =>
+	execute(
+		op,
+		raw,
+		ctx as C,
+		"http",
+		resolveOperationSurfaceBinding(op, "http")?.config,
+		options,
+	);
 
 const chunkSchema = z.object({ index: z.number(), value: z.string() });
 type Chunk = z.infer<typeof chunkSchema>;
@@ -54,7 +63,7 @@ describe("streaming operations", () => {
 					const n = Number.parseInt(payload.id, 10) || 2;
 					return { ok: true, value: streamChunks(n) };
 				},
-				expose: { http: { method: "POST", path: "/stream" } },
+				expose: { http: { default: { method: "POST", path: "/stream" } } },
 			};
 
 			const result = await executeOnHttp(op, { id: "3" });
@@ -87,7 +96,7 @@ describe("streaming operations", () => {
 					ok: true,
 					value: invalidStreamValueForTest(),
 				}),
-				expose: { http: { method: "POST", path: "/bad" } },
+				expose: { http: { default: { method: "POST", path: "/bad" } } },
 			};
 
 			const result = await executeOnHttp(op, { id: "x" });
@@ -117,7 +126,9 @@ describe("streaming operations", () => {
 					ok: true,
 					value: streamChunks(Number.parseInt(p.id, 10) || 2),
 				}),
-				expose: { http: { method: "POST", path: "/stream-http" } },
+				expose: {
+					http: { default: { method: "POST", path: "/stream-http" } },
+				},
 			};
 
 			const registry = new Map([
@@ -179,7 +190,7 @@ describe("streaming operations", () => {
 					ok: true,
 					value: streamChunks(Number.parseInt(p.id, 10) || 2),
 				}),
-				expose: { ws: {} },
+				expose: { ws: { default: {} } },
 			};
 
 			const registry = new Map([
@@ -229,7 +240,7 @@ describe("streaming operations", () => {
 				outputSchema: z.never(),
 				outputChunkSchema: chunkSchema,
 				handler: async () => ({ ok: true, value: streamChunks(0) }),
-				expose: { job: { queue: "q", retries: 1 } },
+				expose: { job: { default: { queue: "q", retries: 1 } } },
 			};
 
 			const registry = new Map([

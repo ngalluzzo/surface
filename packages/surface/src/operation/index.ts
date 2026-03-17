@@ -12,7 +12,9 @@ export {
 	defineRegistry,
 	exportSchemas,
 	forSurface,
+	getSurfaceBindingLookupKey,
 	normalizeOperationSurfaceBindings,
+	resolveOperationSurfaceBinding,
 	normalizeSurfaceBindings,
 	registerOperationSchema,
 } from "../registry";

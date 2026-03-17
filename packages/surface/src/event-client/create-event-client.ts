@@ -4,7 +4,7 @@ import type { EventClientPublish, EventMap, EventPublishLike } from "./types";
 export interface CreateEventClientOptions<R extends RegistryContract> {
 	/** Transport that can publish to a topic (e.g. SQS, Kafka client). */
 	transport: EventPublishLike;
-	/** Topic (and optional source) per operation. Must match the Registry keys. */
+	/** Topic (and optional source) per binding key. Must match the Registry keys. */
 	eventMap: EventMap<R>;
 }
 

@@ -63,7 +63,8 @@ export function forSurface<C extends DefaultContext = DefaultContext>(
 ): OperationRegistryWithHooks<C> {
 	const filtered = new Map() as OperationRegistryWithHooks<C>;
 	for (const [name, op] of registry) {
-		if (op.expose[surface] !== undefined) {
+		const bindings = op.expose[surface];
+		if (bindings !== undefined && Object.keys(bindings).length > 0) {
 			filtered.set(name, op as AnyOperation<C>);
 		}
 	}
